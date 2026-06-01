@@ -24,10 +24,17 @@
 需要在 Cloudflare Pages 里设置环境变量/Secrets：
 
 - `OPENAI_API_KEY`：OpenAI-compatible LLM API Key
-- `OPENAI_BASE_URL`：OpenAI-compatible base URL，例如 `https://api.openai.com/v1` 或通义/DeepSeek 的兼容地址
-- `OPENAI_MODEL`：模型名
+- `OPENAI_BASE_URL`：OpenAI-compatible base URL，例如 `https://api.deepseek.com`；小米 MiMo Token Plan 为 `https://token-plan-cn.xiaomimimo.com/v1`
+- `OPENAI_MODEL`：模型名，例如 `deepseek-chat` 或 `MiMo-V2.5`
+- `ZHIHU_ACCESS_SECRET`（可选）：知乎搜索 API 的 Access Secret，在 <https://developer.zhihu.com/profile> 获取。配置后页面「知乎搜索」按钮可直接拉取真实标题/内容并填入评测素材。
 
-API Key 必须放在 Cloudflare Pages 的环境变量/Secret 里，不能写进 `app.js` 或任何前端文件。
+所有 Key 必须放在 Cloudflare Pages 的环境变量/Secret 里，不能写进 `app.js` 或任何前端文件。
+
+## 知乎搜索接入
+
+- 后端接口：`/api/zhihu-search?q=关键词&count=10`（Cloudflare Function `functions/api/zhihu-search.js`，Codespaces FastAPI 同名接口）。
+- 服务端用 `Authorization: Bearer <ZHIHU_ACCESS_SECRET>` + `X-Request-Timestamp`（秒级）调用知乎 `zhihu_search`，返回标题、摘要、赞同数、精选评论与链接。
+- 前端「知乎搜索」按钮会把结果整理成素材文本填入「知乎真实评测素材」，再点「生成」即可让大模型基于真实内容写脚本。
 
 本地预览（在仓库根目录执行）：
 
