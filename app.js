@@ -31,6 +31,9 @@ const els = {
   platform: document.querySelector("#platform"),
   factsInput: document.querySelector("#factsInput"),
   reviewInput: document.querySelector("#reviewInput"),
+  zhihuQuery: document.querySelector("#zhihuQuery"),
+  zhihuSearchBtn: document.querySelector("#zhihuSearchBtn"),
+  zhihuResults: document.querySelector("#zhihuResults"),
   assetInput: document.querySelector("#assetInput"),
   assetStrip: document.querySelector("#assetStrip"),
   analyzeBtn: document.querySelector("#analyzeBtn"),
@@ -350,6 +353,79 @@ async function generateTimelineFromApi() {
   }
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function renderZhihuResults(items) {
+  if (!els.zhihuResults) return;
+  if (!items || !items.length) {
+    els.zhihuResults.innerHTML = "";
+    return;
+  }
+  els.zhihuResults.innerHTML = items
+    .map((item) => {
+      const title = escapeHtml(item.title || "无标题");
+      const meta = `赞同 ${item.voteUp} · 评论 ${item.commentCount}`;
+      const link = item.url
+        ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${title}</a>`
+        : title;
+      return `<div class="zhihu-item"><div class="zhihu-item-title">${link}</div><div class="zhihu-item-meta">${escapeHtml(item.type)} · ${meta}</div></div>`;
+    })
+    .join("");
+}
+
+async function searchZhihu() {
+  const query = (els.zhihuQuery && els.zhihuQuery.value.trim()) || els.productName.value.trim();
+  if (!query) {
+    setApiStatus("请先填关键词或产品名");
+    return;
+  }
+
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setApiStatus("知乎搜索需部署后端");
+    if (els.zhihuResults) {
+      els.zhihuResults.innerHTML =
+        '<div class="zhihu-hint">本地 file:// 无法调用知乎接口，请在已部署站点使用，或填写后端地址。</div>';
+    }
+    return;
+  }
+
+  const btn = els.zhihuSearchBtn;
+  if (btn) btn.disabled = true;
+  setApiStatus("知乎搜索中");
+  if (els.zhihuResults) els.zhihuResults.innerHTML = '<div class="zhihu-hint">正在搜索知乎…</div>';
+
+  try {
+    const url = `${apiBase}/api/zhihu-search?q=${encodeURIComponent(query)}&count=10`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "知乎搜索失败");
+    }
+    const items = Array.isArray(data.items) ? data.items : [];
+    renderZhihuResults(items);
+    if (data.material) {
+      els.reviewInput.value = data.material;
+      renderAll(true);
+    }
+    setApiStatus(items.length ? `知乎素材已载入 ${items.length} 条` : "知乎无结果");
+  } catch (error) {
+    console.warn(error);
+    setApiStatus("知乎搜索失败");
+    if (els.zhihuResults) {
+      els.zhihuResults.innerHTML = `<div class="zhihu-hint">${escapeHtml(error.message || "知乎搜索失败")}</div>`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function productPrefix() {
   return els.productName.value.trim() || "这款产品";
 }
@@ -580,6 +656,7 @@ function downloadBrief() {
 function bindEvents() {
   els.analyzeBtn.addEventListener("click", generateTimelineFromApi);
   els.generateBtn.addEventListener("click", generateTimelineFromApi);
+  if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", searchZhihu);
   els.resetBtn.addEventListener("click", () => {
     initialState.assets.forEach((asset) => URL.revokeObjectURL(asset.url));
     initialState.assets = [];

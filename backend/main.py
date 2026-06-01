@@ -16,6 +16,7 @@
 import json
 import os
 import re
+import time
 
 import httpx
 from fastapi import FastAPI
@@ -217,11 +218,138 @@ def normalize_timeline(data: dict, src: GenerateInput) -> dict:
     }
 
 
+ZHIHU_SEARCH_URL = "https://developer.zhihu.com/api/v1/content/zhihu_search"
+
+
+def _strip_html(value: str) -> str:
+    text = re.sub(r"<[^>]+>", "", str(value or ""))
+    text = (
+        text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+    )
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _clamp_count(value) -> int:
+    n = _num(value, 10) or 10
+    n = int(n)
+    if n <= 0:
+        return 10
+    return min(10, n)
+
+
+def _normalize_zhihu_items(items) -> list[dict]:
+    out = []
+    for item in items or []:
+        comments = [
+            _strip_html(c.get("Content"))
+            for c in (item.get("CommentInfoList") or [])
+            if _strip_html(c.get("Content"))
+        ]
+        out.append(
+            {
+                "title": _strip_html(item.get("Title")),
+                "type": item.get("ContentType") or "",
+                "contentId": item.get("ContentID") or "",
+                "summary": _strip_html(item.get("ContentText")),
+                "url": item.get("Url") or "",
+                "voteUp": int(_num(item.get("VoteUpCount"), 0) or 0),
+                "commentCount": int(_num(item.get("CommentCount"), 0) or 0),
+                "author": _strip_html(item.get("AuthorName")),
+                "authorBadge": _strip_html(item.get("AuthorBadgeText")),
+                "editTime": int(_num(item.get("EditTime"), 0) or 0),
+                "comments": comments,
+            }
+        )
+    return out
+
+
+def _build_zhihu_material(query: str, items: list[dict]) -> str:
+    if not items:
+        return ""
+    blocks = []
+    for index, item in enumerate(items):
+        lines = [
+            f"【{index + 1}. {item['title'] or '无标题'}】(赞同 {item['voteUp']} · 评论 {item['commentCount']})",
+            item["summary"],
+        ]
+        if item["comments"]:
+            lines.append("精选评论：" + " / ".join(item["comments"][:3]))
+        if item["url"]:
+            lines.append(f"来源：{item['url']}")
+        blocks.append("\n".join(ln for ln in lines if ln))
+    return f"知乎搜索「{query}」相关内容（共 {len(items)} 条）：\n\n" + "\n\n".join(blocks)
+
+
 @app.get("/api/health")
 async def health():
     has_key = bool(os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"))
     model = os.environ.get("LLM_MODEL") or os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
-    return {"ok": True, "hasApiKey": has_key, "model": model}
+    has_zhihu = bool(os.environ.get("ZHIHU_ACCESS_SECRET") or os.environ.get("ZHIHU_ACCESS_TOKEN"))
+    return {"ok": True, "hasApiKey": has_key, "model": model, "hasZhihu": has_zhihu}
+
+
+@app.get("/api/zhihu-search")
+async def zhihu_search(q: str = "", query: str = "", count: int = 10):
+    access_secret = os.environ.get("ZHIHU_ACCESS_SECRET") or os.environ.get("ZHIHU_ACCESS_TOKEN")
+    if not access_secret:
+        return JSONResponse(
+            {
+                "error": "知乎 Access Secret 未配置。请设置环境变量 ZHIHU_ACCESS_SECRET"
+                "（在 https://developer.zhihu.com/profile 获取）。"
+            },
+            status_code=501,
+        )
+
+    keyword = (q or query or "").strip()
+    if not keyword:
+        return JSONResponse({"error": "缺少搜索关键词 q"}, status_code=400)
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                ZHIHU_SEARCH_URL,
+                params={"Query": keyword, "Count": _clamp_count(count)},
+                headers={
+                    "authorization": f"Bearer {access_secret}",
+                    "x-request-timestamp": str(int(time.time())),
+                    "content-type": "application/json",
+                },
+            )
+    except httpx.HTTPError as error:
+        return JSONResponse({"error": f"无法连接知乎服务: {error}"}, status_code=502)
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return JSONResponse(
+            {"error": "知乎返回非 JSON", "providerStatus": response.status_code},
+            status_code=502,
+        )
+
+    if response.status_code >= 400 or payload.get("Code") != 0:
+        return JSONResponse(
+            {
+                "error": payload.get("Message") or "知乎搜索接口返回错误",
+                "code": payload.get("Code"),
+                "providerStatus": response.status_code,
+            },
+            status_code=502,
+        )
+
+    data = payload.get("Data") or {}
+    items = _normalize_zhihu_items(data.get("Items"))
+    return {
+        "query": keyword,
+        "count": len(items),
+        "searchHashId": data.get("SearchHashId") or "",
+        "emptyReason": data.get("EmptyReason") or "",
+        "items": items,
+        "material": _build_zhihu_material(keyword, items),
+    }
 
 
 @app.post("/api/generate-timeline")

@@ -93,6 +93,18 @@
 目标人群：通勤、办公、轻运动用户</textarea>
         </label>
 
+        <div class="zhihu-search">
+          <label class="textarea-label">
+            <span>知乎搜索关键词</span>
+            <input id="zhihuQuery" type="text" placeholder="留空则用产品名搜索，如：开放式蓝牙耳机 通勤" />
+          </label>
+          <button class="icon-button" id="zhihuSearchBtn" type="button" title="用知乎搜索 API 拉取真实标题与内容">
+            <i data-lucide="search"></i>
+            <span>知乎搜索</span>
+          </button>
+        </div>
+        <div class="zhihu-results" id="zhihuResults"></div>
+
         <label class="textarea-label">
           <span>知乎真实评测素材</span>
           <textarea id="reviewInput" rows="10">不少用户提到这款耳机长时间戴着比较轻，耳道没有明显压迫感，办公室和通勤都比较舒服。
