@@ -573,7 +573,9 @@ function formatTime(value) {
 }
 
 function renderAll(rebuild = true) {
-  if (rebuild || !initialState.timeline.length) {
+  const current = initialState.timeline;
+  const hasScenes = current && Array.isArray(current.timeline) && current.timeline.length > 0;
+  if (rebuild || !hasScenes) {
     initialState.timeline = buildTimeline();
   }
   renderScript(initialState.timeline);
