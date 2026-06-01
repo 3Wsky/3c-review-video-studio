@@ -45,6 +45,7 @@ const els = {
   jsonOutput: document.querySelector("#jsonOutput"),
   moduleList: document.querySelector("#moduleList"),
   apiStatus: document.querySelector("#apiStatus"),
+  apiBase: document.querySelector("#apiBase"),
   sceneCount: document.querySelector("#sceneCount"),
   durationCount: document.querySelector("#durationCount"),
   sourceCount: document.querySelector("#sourceCount"),
@@ -235,6 +236,24 @@ function setApiStatus(text) {
   if (els.apiStatus) els.apiStatus.textContent = text;
 }
 
+const API_BASE_KEY = "apiBase";
+
+function getApiBase() {
+  let base = "";
+  if (els.apiBase && els.apiBase.value.trim()) {
+    base = els.apiBase.value.trim();
+  } else {
+    try {
+      base = localStorage.getItem(API_BASE_KEY) || "";
+    } catch (error) {
+      base = "";
+    }
+  }
+  const params = new URLSearchParams(location.search);
+  if (!base && params.get("api")) base = params.get("api");
+  return base.trim().replace(/\/$/, "");
+}
+
 function normalizeTimelineData(data) {
   const local = buildTimeline();
   const project = {
@@ -287,7 +306,9 @@ function normalizeTimelineData(data) {
 }
 
 async function generateTimelineFromApi() {
-  if (location.protocol === "file:") {
+  const apiBase = getApiBase();
+
+  if (!apiBase && location.protocol === "file:") {
     initialState.timeline = buildTimeline();
     initialState.currentScene = 0;
     setApiStatus("本地模拟");
@@ -301,7 +322,7 @@ async function generateTimelineFromApi() {
   });
 
   try {
-    const response = await fetch("/api/generate-timeline", {
+    const response = await fetch(`${apiBase}/api/generate-timeline`, {
       method: "POST",
       headers: {
         "content-type": "application/json"
@@ -314,7 +335,7 @@ async function generateTimelineFromApi() {
     }
     initialState.timeline = normalizeTimelineData(data);
     initialState.currentScene = 0;
-    setApiStatus("Cloudflare API");
+    setApiStatus(apiBase ? "Codespaces 后端" : "Cloudflare API");
     renderAll(false);
   } catch (error) {
     console.warn(error);
@@ -621,6 +642,24 @@ function bindEvents() {
   [els.productName, els.category, els.targetDuration, els.platform, els.factsInput, els.reviewInput].forEach((input) => {
     input.addEventListener("change", () => renderAll(true));
   });
+
+  if (els.apiBase) {
+    try {
+      els.apiBase.value = localStorage.getItem(API_BASE_KEY) || "";
+    } catch (error) {
+      /* ignore storage errors */
+    }
+    els.apiBase.addEventListener("change", () => {
+      const base = els.apiBase.value.trim().replace(/\/$/, "");
+      els.apiBase.value = base;
+      try {
+        localStorage.setItem(API_BASE_KEY, base);
+      } catch (error) {
+        /* ignore storage errors */
+      }
+      setApiStatus(base ? "后端已配置" : "本地预览");
+    });
+  }
 }
 
 bindEvents();
