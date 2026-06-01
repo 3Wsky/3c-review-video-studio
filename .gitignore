@@ -1,0 +1,14 @@
+.wrangler/
+.dev.vars
+node_modules/
+dist/
+renders/
+tmp/
+*.log
+*.mp4
+*.mov
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.env

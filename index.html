@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3C Review Video Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">3C</div>
+        <div>
+          <h1>Review Video Studio</h1>
+          <p>产品实拍图 · 真实评测 · 口播脚本 · HyperFrames 时间轴</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-button" id="copyPromptBtn" type="button" title="复制 3C Prompt">
+          <i data-lucide="clipboard-copy"></i>
+          <span>Prompt</span>
+        </button>
+        <button class="icon-button primary" id="generateBtn" type="button" title="生成脚本和时间轴">
+          <i data-lucide="wand-sparkles"></i>
+          <span>生成</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="panel input-panel">
+        <div class="section-head">
+          <h2>项目输入</h2>
+          <span class="status-pill" id="apiStatus">本地预览</span>
+        </div>
+
+        <div class="field-grid">
+          <label>
+            <span>产品名</span>
+            <input id="productName" type="text" value="某款开放式蓝牙耳机" />
+          </label>
+          <label>
+            <span>品类</span>
+            <select id="category">
+              <option>耳机</option>
+              <option>手机</option>
+              <option>平板</option>
+              <option>笔记本</option>
+              <option>显示器</option>
+              <option>显卡</option>
+              <option>智能穿戴</option>
+            </select>
+          </label>
+          <label>
+            <span>目标时长</span>
+            <input id="targetDuration" type="number" min="30" max="240" step="5" value="90" />
+          </label>
+          <label>
+            <span>视频平台</span>
+            <select id="platform">
+              <option>抖音 / 快手 9:16</option>
+              <option>B站竖屏 9:16</option>
+              <option>小红书 3:4</option>
+              <option>视频号 9:16</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="segmented" role="group" aria-label="真人出镜布局">
+          <button class="segment active" data-layout="center" type="button">真人居中</button>
+          <button class="segment" data-layout="left" type="button">真人左侧</button>
+          <button class="segment" data-layout="pip" type="button">右下小窗</button>
+          <button class="segment" data-layout="none" type="button">无真人</button>
+        </div>
+
+        <label class="upload-zone" for="assetInput">
+          <input id="assetInput" type="file" accept="image/*,video/*" multiple />
+          <i data-lucide="upload-cloud"></i>
+          <span>上传产品实拍图或短视频</span>
+        </label>
+        <div class="asset-strip" id="assetStrip"></div>
+
+        <label class="textarea-label">
+          <span>产品事实</span>
+          <textarea id="factsInput" rows="5">核心卖点：佩戴稳定、开放式不堵耳、通勤听感自然
+已知限制：低频量感一般，嘈杂环境隔音弱
+价格区间：500-800 元
+目标人群：通勤、办公、轻运动用户</textarea>
+        </label>
+
+        <label class="textarea-label">
+          <span>知乎真实评测素材</span>
+          <textarea id="reviewInput" rows="10">不少用户提到这款耳机长时间戴着比较轻，耳道没有明显压迫感，办公室和通勤都比较舒服。
+也有人反馈开放式结构在地铁里会吃环境噪音，音量开太大会影响听感，低频氛围感不如入耳式。
+稳定性评价比较集中，走路和轻运动不容易掉，但剧烈运动还是会晃。
+综合来看，它更像一款适合日常挂耳使用的舒适型耳机，不是追求重低音和强降噪的人群首选。</textarea>
+        </label>
+
+        <div class="button-row">
+          <button class="icon-button primary" id="analyzeBtn" type="button">
+            <i data-lucide="sparkles"></i>
+            <span>生成方案</span>
+          </button>
+          <button class="icon-button" id="resetBtn" type="button">
+            <i data-lucide="rotate-ccw"></i>
+            <span>重置</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="section-head">
+          <h2>编导台</h2>
+          <div class="tabbar">
+            <button class="tab active" data-tab="script" type="button">脚本</button>
+            <button class="tab" data-tab="timeline" type="button">时间轴</button>
+            <button class="tab" data-tab="render" type="button">渲染计划</button>
+          </div>
+        </div>
+
+        <div class="tab-panel active" id="scriptTab">
+          <div class="metric-row">
+            <div><strong id="sceneCount">6</strong><span>分镜</span></div>
+            <div><strong id="durationCount">90s</strong><span>预计时长</span></div>
+            <div><strong id="sourceCount">4</strong><span>观点来源</span></div>
+          </div>
+          <div class="script-list" id="scriptList"></div>
+        </div>
+
+        <div class="tab-panel" id="timelineTab">
+          <div class="timeline-ruler" id="timelineRuler"></div>
+          <div class="timeline-list" id="timelineList"></div>
+        </div>
+
+        <div class="tab-panel" id="renderTab">
+          <div class="render-grid">
+            <div>
+              <h3>融合模块</h3>
+              <div class="module-list" id="moduleList"></div>
+            </div>
+            <div>
+              <h3>Timeline JSON</h3>
+              <pre id="jsonOutput" class="code-box"></pre>
+            </div>
+          </div>
+          <div class="button-row">
+            <button class="icon-button" id="downloadJsonBtn" type="button">
+              <i data-lucide="download"></i>
+              <span>下载 JSON</span>
+            </button>
+            <button class="icon-button" id="downloadBriefBtn" type="button">
+              <i data-lucide="file-down"></i>
+              <span>下载方案</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel preview-panel">
+        <div class="section-head">
+          <h2>画面预览</h2>
+          <div class="scene-nav">
+            <button class="square-button" id="prevSceneBtn" type="button" title="上一镜">
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <span id="sceneIndicator">1 / 6</span>
+            <button class="square-button" id="nextSceneBtn" type="button" title="下一镜">
+              <i data-lucide="chevron-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="video-stage" id="videoStage">
+            <div class="stage-topline">
+              <span id="stageProduct">某款开放式蓝牙耳机</span>
+              <span id="stageTime">00:00</span>
+            </div>
+            <div class="product-visual" id="productVisual">
+              <div class="device-placeholder">
+                <span></span>
+              </div>
+            </div>
+            <div class="host-slot center" id="hostSlot">
+              <div class="host-head"></div>
+              <div class="host-body"></div>
+            </div>
+            <div class="info-card" id="infoCard">
+              <small id="visualType">结论</small>
+              <strong id="visualHeadline">舒适度是主卖点</strong>
+              <span id="visualDetail">低频和隔音不是它的强项</span>
+            </div>
+            <div class="subtitle-bar" id="subtitleBar">这款耳机真正的优势，其实不是降噪，而是长时间佩戴的舒服程度</div>
+          </div>
+        </div>
+
+        <div class="inspect-table">
+          <div><span>主控</span><strong>Timeline JSON</strong></div>
+          <div><span>画面</span><strong>HyperFrames</strong></div>
+          <div><span>脚本</span><strong>Pixelle + 自定义 Prompt</strong></div>
+          <div><span>配音/字幕</span><strong>MoneyPrinterTurbo 思路</strong></div>
+        </div>
+      </aside>
+    </main>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
