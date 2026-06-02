@@ -141,52 +141,52 @@ function buildScenes() {
 
   const scenes = [
     {
-      title: "开场结论",
-      visualType: "真人口播 + 产品图",
-      headline: `${product}先看结论`,
-      detail: "把最大优点和最大限制先讲清楚",
-      voiceover: `${product}我不建议只看参数。它真正要解决的问题，是${insights.comfort || "日常使用的舒适度"}。如果你想找一副${category}日常通勤用，这个方向值得看，但它也不是所有人都适合。`,
-      source: "LLM 原创结构"
+      title: "前5秒·钩子",
+      visualType: "真人口播 + 大字幕",
+      headline: "别急着划走",
+      detail: "一句话钩住，5 秒内留住人",
+      voiceover: `先别划走——${product}到底值不值得买，看完这条不踩坑。`,
+      source: "钩子·留人"
     },
     {
-      title: "真实反馈",
+      title: "痛点共鸣",
+      visualType: "痛点字幕卡",
+      headline: "这说的就是你",
+      detail: insights.weakness || "参数好看，到手才发现不好用",
+      voiceover: `买${category}最怕什么？参数吹上天，到手才发现日常根本不顺手。${product}是不是也这样，我替你扒清楚了。`,
+      source: "情绪曲线·共鸣"
+    },
+    {
+      title: "悬念展开",
       visualType: "知乎观点摘要",
-      headline: "高频好评集中在体验",
-      detail: insights.comfort || "佩戴和通勤体验是主要关注点",
-      voiceover: `从真实评测里能看到，用户夸得最多的不是玄学音质，而是${insights.comfort || "长时间使用更轻松"}。这类反馈对数码产品很关键，因为它决定你会不会每天都愿意用。`,
-      source: "Pixelle 内容提炼"
+      headline: "关键不在宣传页",
+      detail: insights.comfort || "真正决定体验的是日常细节",
+      voiceover: `先抛个问题：${product}最该看的，不是写在宣传页上的卖点，而是${insights.comfort || "长期用下来的真实体验"}。往下看你就懂了。`,
+      source: "情绪曲线·悬念"
     },
     {
-      title: "场景验证",
-      visualType: "使用场景卡",
-      headline: "适合谁",
-      detail: insights.audience || "通勤、办公、轻运动用户",
-      voiceover: `它更适合${insights.audience || "通勤和办公场景"}。如果你的需求是边走边听、开会间隙戴着、不想耳道被堵住，那它的价值会比纸面参数更明显。`,
-      source: "3C Prompt 约束"
+      title: "高潮·揭晓",
+      visualType: "价值高光卡",
+      headline: "最大价值在这",
+      detail: insights.comfort || "真实好评最集中的点",
+      voiceover: `真正打动人的，是${insights.comfort || "它在日常场景里的省心"}。从真实评测看，用户夸得最多的就是这一点——这才是它的最大价值。但先别急着下单。`,
+      source: "情绪曲线·高潮"
     },
     {
-      title: "短板说明",
+      title: "反转·短板",
       visualType: "优缺点对照",
-      headline: "限制要提前说",
-      detail: insights.weakness || "低频和隔音不是主场",
-      voiceover: `但短板也很清楚，${insights.weakness || "它不适合追求强隔音和重低频的人"}。如果你经常在地铁、马路边使用，环境噪音会直接影响体验，这点不能被营销话术盖过去。`,
-      source: "事实检查"
+      headline: "短板提前说",
+      detail: insights.weakness || "不适合追求极致的那部分人",
+      voiceover: `话说回来，它也有短板：${insights.weakness || "不适合追求极致性能或隔音的人"}。这点不提前讲清楚，买了容易后悔。`,
+      source: "情绪曲线·反转"
     },
     {
-      title: "稳定性判断",
-      visualType: "参数/反馈卡",
-      headline: "稳定性是加分项",
-      detail: insights.stability || "轻运动不容易掉，剧烈运动仍需谨慎",
-      voiceover: `${insights.stability || "稳定性评价整体偏正面"}。所以它不是专业运动耳机，但日常走路、办公室移动、轻量运动场景，大概率能给到一个比较省心的体验。`,
-      source: "评测归纳"
-    },
-    {
-      title: "购买建议",
-      visualType: "结论卡",
-      headline: "买不买看场景",
-      detail: "舒适优先可以买，音质/隔音优先慎选",
-      voiceover: `最后我的建议很简单：如果你要的是舒服、稳定、日常高频使用，它值得加入候选；如果你要的是强降噪、重低频、沉浸听歌，同价位入耳式可能更合适。`,
-      source: "原创结论"
+      title: "结尾·结论+互动",
+      visualType: "结论卡 + 引导关注",
+      headline: "买不买看这句",
+      detail: "给结论 + 引导互动",
+      voiceover: `所以结论很简单：要的是${insights.audience || "日常稳定好用"}，它值得入手；另有所求就再等等。觉得有用点个关注，评论区告诉我下一个想看谁。`,
+      source: "情绪曲线·收尾"
     }
   ];
 
@@ -201,12 +201,16 @@ function estimateDuration(text) {
 function buildTimeline() {
   const { scenes, insights } = buildScenes();
   const target = Number(els.targetDuration.value) || 90;
-  const rawDurations = scenes.map((scene) => estimateDuration(scene.voiceover));
-  const totalRaw = rawDurations.reduce((sum, item) => sum + item, 0);
+  // 第 1 镜是「前5秒钩子」，固定一个 ≤6s 的短时长留人；其余按文案长度分配剩余时间
+  const hookDuration = scenes.length > 1 ? Math.min(5, Math.max(3, target * 0.06)) : target;
+  const restTarget = Math.max(0, target - hookDuration);
+  const restRaw = scenes.slice(1).map((scene) => estimateDuration(scene.voiceover));
+  const totalRestRaw = restRaw.reduce((sum, item) => sum + item, 0) || 1;
   let cursor = 0;
 
   const timeline = scenes.map((scene, index) => {
-    const duration = Math.max(5, (rawDurations[index] / totalRaw) * target);
+    const duration =
+      index === 0 ? hookDuration : Math.max(5, (restRaw[index - 1] / totalRestRaw) * restTarget);
     const start = cursor;
     const end = index === scenes.length - 1 ? target : start + duration;
     cursor = end;
@@ -874,14 +878,19 @@ function downloadFile(filename, content, type = "application/json") {
 }
 
 function buildPrompt() {
-  return `你是数码 3C 技术博主编导。请基于我提供的产品事实、产品实拍素材描述、知乎真实评测摘要，生成原创口播稿和 Timeline JSON。
+  return `你是数码 3C 短视频编导。请基于我提供的产品事实、产品实拍素材描述、知乎真实评测摘要，生成一条"能让人看完"的竖屏短视频口播稿和 Timeline JSON。
+
+短视频留人逻辑（最重要）：
+1. 前 5 秒定生死：第 1 个分镜是 3-6 秒的最强钩子（痛点/反常识/利益点），第一句就抓住人，不要客套和慢热铺垫。
+2. 按情绪曲线推进：钩子 → 痛点共鸣 → 悬念展开 → 高潮(揭晓最大价值) → 反转(诚实讲短板) → 结尾(给购买结论 + 引导关注/评论)。
+3. 每个分镜结尾留一个"钩子/开放回路"引向下一镜，让人不划走；节奏紧凑、口语化、多短句。
 
 硬性要求：
 1. 不能照搬知乎原句，只能提炼观点、使用场景、优缺点和争议点。
 2. 不得编造参数、价格、跑分、续航、降噪等级等事实。
 3. 输出适合 ${els.platform.value} 的 ${els.targetDuration.value} 秒口播视频。
 4. 每个分镜需要包含 start、end、voiceover、subtitle、visual.type、visual.layout、source。
-5. 风格是技术博主口播：直接、克制、可信、有购买建议。
+5. 风格：真实、有判断、有钩子、有购买建议，像会讲故事的数码博主，不是念说明书。
 
 产品：${els.productName.value}
 品类：${els.category.value}
