@@ -4,12 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1080, height=1920" />
     <!--
-      3C 测评 · 9:16 竖屏模板（HyperFrames 合成，渲染管线地基样例）
-      结构借鉴 Pixelle-Video 的分层模板：背景媒体层 + 渐变遮罩 + 内容层。
-      后续由 Timeline JSON 自动生成；当前为风格验证用的静态样例。
-      注意（CJK 字体）：HyperFrames 渲染走「确定性字体」，默认不含中文字体。
-      正式上线请在下方 style 内加 @font-face 内嵌中文字体（如 Noto Sans SC），
-      或在渲染机安装 fonts-noto-cjk，否则中文会渲染为方块。详见 README。
+      由 build.mjs 从 Timeline JSON 自动生成，请勿手改（改模板请改 build.mjs）。
+      产品：示例旗舰手机 Pro
+      CJK 字体：HyperFrames 渲染走确定性字体，默认不含中文。Linux worker 需装
+      fonts-noto-cjk 或在下方 style 内 @font-face 内嵌 Noto Sans SC，否则中文变方块。
     -->
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
@@ -18,65 +16,44 @@
         width: 1080px; height: 1920px; overflow: hidden;
         background: #0b0d12;
         font-family: "PingFang SC", "Source Han Sans", "Microsoft YaHei",
-          "WenQuanYi Zen Hei", sans-serif;
+          "Noto Sans SC", "WenQuanYi Zen Hei", sans-serif;
       }
-
-      /* 背景媒体层（产品图，Ken Burns 缓推） */
+      .scene { position: absolute; inset: 0; }
       .bg-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
-      .bg-layer img {
-        width: 100%; height: 100%; object-fit: cover;
-        transform-origin: 50% 42%;
+      .bg-layer img { width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 42%; }
+      .bg-fallback {
+        background:
+          radial-gradient(120% 80% at 50% 0%, rgba(91,140,255,0.22), transparent 60%),
+          radial-gradient(120% 80% at 50% 100%, rgba(138,107,255,0.20), transparent 60%),
+          #0b0d12;
       }
-
-      /* 渐变遮罩：顶部压暗给标题、底部压暗给字幕 */
       .gradient-overlay {
         position: absolute; inset: 0; z-index: 1;
         background: linear-gradient(to bottom,
           rgba(6,8,14,0.86) 0%,
-          rgba(6,8,14,0.52) 18%,
+          rgba(6,8,14,0.50) 18%,
           rgba(6,8,14,0.12) 40%,
           rgba(6,8,14,0.12) 50%,
           rgba(6,8,14,0.88) 100%);
       }
-
       .content { position: absolute; inset: 0; z-index: 2; color: #fff; }
-
-      /* 顶部品类胶囊 */
       .badge {
         position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
         padding: 14px 34px; border-radius: 999px;
         font-size: 30px; font-weight: 600; letter-spacing: 2px;
         color: #d9e1ff; background: rgba(88,110,255,0.18);
-        border: 1px solid rgba(140,160,255,0.45);
-        backdrop-filter: blur(6px); white-space: nowrap;
+        border: 1px solid rgba(140,160,255,0.45); white-space: nowrap;
       }
-
-      /* 主标题 */
       .title {
-        position: absolute; top: 188px; left: 80px; right: 80px;
-        font-size: 92px; font-weight: 800; line-height: 1.16; text-align: center;
-        text-shadow: 0 6px 24px rgba(0,0,0,0.55);
+        position: absolute; top: 196px; left: 80px; right: 80px;
+        font-size: 86px; font-weight: 800; line-height: 1.18; text-align: center;
+        text-shadow: 0 6px 24px rgba(0,0,0,0.6);
       }
-      .title .accent { color: #6ea8ff; }
-
-      /* 参数卡（数据可视化雏形：一个关键指标 + 进度条） */
-      .spec-card {
-        position: absolute; left: 90px; right: 90px; top: 980px;
-        padding: 44px 48px; border-radius: 32px;
-        background: rgba(18,22,34,0.72);
-        border: 1px solid rgba(120,140,200,0.30);
-        backdrop-filter: blur(10px);
-        box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      .detail {
+        position: absolute; top: 470px; left: 110px; right: 110px;
+        font-size: 44px; font-weight: 500; line-height: 1.4; text-align: center;
+        color: #c6cfe6; text-shadow: 0 3px 14px rgba(0,0,0,0.6);
       }
-      .spec-row { display: flex; align-items: baseline; justify-content: space-between; }
-      .spec-label { font-size: 38px; font-weight: 600; color: #aeb8d4; }
-      .spec-value { font-size: 76px; font-weight: 800; color: #fff; }
-      .spec-value .unit { font-size: 36px; font-weight: 600; color: #8fa0c8; margin-left: 8px; }
-      .bar { margin-top: 28px; height: 18px; border-radius: 999px; background: rgba(255,255,255,0.10); overflow: hidden; }
-      .bar-fill { height: 100%; width: 0%; border-radius: 999px;
-        background: linear-gradient(90deg, #5b8cff, #8a6bff); }
-
-      /* 底部逐句字幕 */
       .subtitle {
         position: absolute; left: 80px; right: 80px; bottom: 150px;
         font-size: 56px; font-weight: 600; line-height: 1.5; text-align: center;
@@ -90,61 +67,125 @@
       id="root"
       data-composition-id="main"
       data-start="0"
-      data-duration="8"
+      data-duration="60"
       data-width="1080"
       data-height="1920"
       data-fps="30"
     >
-      <div id="bgLayer" class="bg-layer clip" data-start="0" data-duration="8" data-track-index="0">
-        <img id="product" src="assets/product.jpg" alt="product" />
-      </div>
-
-      <div id="overlay" class="gradient-overlay clip" data-start="0" data-duration="8" data-track-index="1"></div>
-
-      <div id="content" class="content clip" data-start="0" data-duration="8" data-track-index="2">
-        <div id="badge" class="badge">旗舰手机 · 实测</div>
-        <div id="title" class="title">这台值不值<br /><span class="accent">先看这一个数</span></div>
-
-        <div id="specCard" class="spec-card">
-          <div class="spec-row">
-            <span class="spec-label">续航实测</span>
-            <span class="spec-value"><span id="specNum">0</span><span class="unit">小时</span></span>
-          </div>
-          <div class="bar"><div id="barFill" class="bar-fill"></div></div>
+      <section
+        id="scene-1"
+        class="scene clip"
+        data-start="0"
+        data-duration="5"
+        data-track-index="0"
+      >
+        <div class="bg-layer"><img id="scene-1-img" src="assets/product.jpg" alt="" /></div>
+        <div class="gradient-overlay"></div>
+        <div class="content">
+          <div id="scene-1-badge" class="badge">前5秒·钩子</div>
+          <div id="scene-1-title" class="title">一天不用充电宝</div>
+          <div id="scene-1-detail" class="detail">续航才是真刚需</div>
+          <div id="scene-1-sub" class="subtitle">重度用一整天，<span class="hl">12 小时</span>还有电</div>
         </div>
+      </section>
 
-        <div id="subtitle" class="subtitle">重度使用一整天，<span class="hl">12 小时</span>还有电</div>
-      </div>
+      <section
+        id="scene-2"
+        class="scene clip"
+        data-start="5"
+        data-duration="13"
+        data-track-index="0"
+      >
+        <div class="bg-layer"><img id="scene-2-img" src="assets/product.jpg" alt="" /></div>
+        <div class="gradient-overlay"></div>
+        <div class="content">
+          <div id="scene-2-badge" class="badge">痛点共鸣</div>
+          <div id="scene-2-title" class="title">电量焦虑这次有解</div>
+          <div id="scene-2-detail" class="detail">5000mAh 大电池压底</div>
+          <div id="scene-2-sub" class="subtitle">下午就找插座？这次不一样</div>
+        </div>
+      </section>
+
+      <section
+        id="scene-3"
+        class="scene clip"
+        data-start="18"
+        data-duration="17"
+        data-track-index="0"
+      >
+        <div class="bg-layer"><img id="scene-3-img" src="assets/product.jpg" alt="" /></div>
+        <div class="gradient-overlay"></div>
+        <div class="content">
+          <div id="scene-3-badge" class="badge">高潮·揭晓</div>
+          <div id="scene-3-title" class="title">续航实测 12 小时</div>
+          <div id="scene-3-detail" class="detail">混合使用，到家剩 20%</div>
+          <div id="scene-3-sub" class="subtitle">重度实测 <span class="hl">12 小时</span>，到家还剩 <span class="hl">20%</span></div>
+        </div>
+      </section>
+
+      <section
+        id="scene-4"
+        class="scene clip"
+        data-start="35"
+        data-duration="13"
+        data-track-index="0"
+      >
+        <div class="bg-layer"><img id="scene-4-img" src="assets/product.jpg" alt="" /></div>
+        <div class="gradient-overlay"></div>
+        <div class="content">
+          <div id="scene-4-badge" class="badge">反转·短板</div>
+          <div id="scene-4-title" class="title">短板：有点压手</div>
+          <div id="scene-4-detail" class="detail">重量偏沉，轻薄党慎选</div>
+          <div id="scene-4-sub" class="subtitle">短板也说清楚：机身偏重</div>
+        </div>
+      </section>
+
+      <section
+        id="scene-5"
+        class="scene clip"
+        data-start="48"
+        data-duration="12"
+        data-track-index="0"
+      >
+        <div class="bg-layer"><img id="scene-5-img" src="assets/product.jpg" alt="" /></div>
+        <div class="gradient-overlay"></div>
+        <div class="content">
+          <div id="scene-5-badge" class="badge">结尾·结论+互动</div>
+          <div id="scene-5-title" class="title">买不买看这句</div>
+          <div id="scene-5-detail" class="detail">重续航影像就值，追轻薄再等</div>
+          <div id="scene-5-sub" class="subtitle">要续航就入，想轻再等</div>
+        </div>
+      </section>
     </div>
 
     <script>
       window.__timelines = window.__timelines || {};
       const tl = gsap.timeline({ paused: true });
-
-      // 产品图 Ken Burns：整段缓慢放大
-      tl.fromTo("#product", { scale: 1.0 }, { scale: 1.14, duration: 8, ease: "none" }, 0);
-
-      // 顶部胶囊滑入
-      tl.from("#badge", { opacity: 0, y: -40, duration: 0.6, ease: "power3.out" }, 0.2);
-
-      // 标题：整体上浮淡入，重点词后弹一下
-      tl.from("#title", { opacity: 0, y: 50, duration: 0.8, ease: "power3.out" }, 0.5);
-      tl.from("#title .accent", { scale: 0.6, opacity: 0, duration: 0.6, ease: "back.out(2)" }, 1.1);
-
-      // 参数卡滑入 + 数字滚动 + 进度条填充（数据可视化雏形）
-      tl.from("#specCard", { opacity: 0, y: 60, duration: 0.7, ease: "power3.out" }, 2.4);
-      const counter = { v: 0 };
-      tl.to(counter, {
-        v: 12, duration: 1.2, ease: "power1.out",
-        onUpdate: () => {
-          document.getElementById("specNum").textContent = Math.round(counter.v);
-        },
-      }, 2.7);
-      tl.to("#barFill", { width: "82%", duration: 1.2, ease: "power2.out" }, 2.7);
-
-      // 字幕进场（逐句）
-      tl.from("#subtitle", { opacity: 0, y: 30, duration: 0.6, ease: "power2.out" }, 3.0);
-
+      tl.fromTo("#scene-1-img", { scale: 1.0 }, { scale: 1.08, duration: 5, ease: "none" }, 0);
+      tl.from("#scene-1-badge", { autoAlpha: 0, y: -30, duration: 0.5, ease: "power3.out" }, 0.15);
+      tl.from("#scene-1-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, 0.25);
+      tl.from("#scene-1-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, 0.45);
+      tl.from("#scene-1-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, 0.55);
+      tl.fromTo("#scene-2-img", { scale: 1.0 }, { scale: 1.08, duration: 13, ease: "none" }, 5);
+      tl.from("#scene-2-badge", { autoAlpha: 0, y: -30, duration: 0.5, ease: "power3.out" }, 5.15);
+      tl.from("#scene-2-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, 5.25);
+      tl.from("#scene-2-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, 5.45);
+      tl.from("#scene-2-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, 5.55);
+      tl.fromTo("#scene-3-img", { scale: 1.0 }, { scale: 1.08, duration: 17, ease: "none" }, 18);
+      tl.from("#scene-3-badge", { autoAlpha: 0, y: -30, duration: 0.5, ease: "power3.out" }, 18.15);
+      tl.from("#scene-3-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, 18.25);
+      tl.from("#scene-3-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, 18.45);
+      tl.from("#scene-3-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, 18.55);
+      tl.fromTo("#scene-4-img", { scale: 1.0 }, { scale: 1.08, duration: 13, ease: "none" }, 35);
+      tl.from("#scene-4-badge", { autoAlpha: 0, y: -30, duration: 0.5, ease: "power3.out" }, 35.15);
+      tl.from("#scene-4-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, 35.25);
+      tl.from("#scene-4-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, 35.45);
+      tl.from("#scene-4-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, 35.55);
+      tl.fromTo("#scene-5-img", { scale: 1.0 }, { scale: 1.08, duration: 12, ease: "none" }, 48);
+      tl.from("#scene-5-badge", { autoAlpha: 0, y: -30, duration: 0.5, ease: "power3.out" }, 48.15);
+      tl.from("#scene-5-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, 48.25);
+      tl.from("#scene-5-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, 48.45);
+      tl.from("#scene-5-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, 48.55);
       window.__timelines["main"] = tl;
     </script>
   </body>

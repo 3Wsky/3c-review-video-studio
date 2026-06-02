@@ -1,0 +1,114 @@
+{
+  "project": {
+    "product": "示例旗舰手机 Pro",
+    "category": "手机",
+    "platform": "抖音",
+    "targetDuration": 60,
+    "layout": "center"
+  },
+  "insights": {
+    "sourceCount": 4,
+    "summary": "续航与影像是这台的强项，重量偏沉是主要短板。",
+    "pros": ["续航扎实", "夜景成片率高", "屏幕观感好"],
+    "cons": ["机身偏重", "快充功率一般"],
+    "audience": ["重度使用者", "拍照党"],
+    "risks": ["参数以实测为准"]
+  },
+  "timeline": [
+    {
+      "id": "scene_01",
+      "index": 1,
+      "title": "前5秒·钩子",
+      "start": 0,
+      "end": 5,
+      "duration": 5,
+      "voiceover": "先说结论：这台最值得买的，不是参数，而是它能让你一整天不带充电宝。",
+      "subtitle": "重度用一整天，12 小时还有电",
+      "visual": {
+        "type": "真人口播 + 产品图",
+        "layout": "center",
+        "headline": "一天不用充电宝",
+        "detail": "续航才是真刚需",
+        "asset": "uploaded_product_asset"
+      },
+      "checks": ["事实来自输入材料", "保留人工复核位"],
+      "source": "LLM 原创结构"
+    },
+    {
+      "id": "scene_02",
+      "index": 2,
+      "title": "痛点共鸣",
+      "start": 5,
+      "end": 18,
+      "duration": 13,
+      "voiceover": "很多人买手机第一天满电焦虑，下午就开始找插座，这种感觉相信你也懂。",
+      "subtitle": "下午就找插座？这次不一样",
+      "visual": {
+        "type": "产品图特写",
+        "layout": "center",
+        "headline": "电量焦虑这次有解",
+        "detail": "5000mAh 大电池压底",
+        "asset": "uploaded_product_asset"
+      },
+      "checks": ["避免长句照搬"],
+      "source": "LLM 原创结构"
+    },
+    {
+      "id": "scene_03",
+      "index": 3,
+      "title": "高潮·揭晓",
+      "start": 18,
+      "end": 35,
+      "duration": 17,
+      "voiceover": "实测重度使用大概 12 小时还有电，刷视频拍照混着用，到家还剩两成，这点最打动人。",
+      "subtitle": "重度实测 12 小时，到家还剩 20%",
+      "visual": {
+        "type": "数据卡",
+        "layout": "center",
+        "headline": "续航实测 12 小时",
+        "detail": "混合使用，到家剩 20%",
+        "asset": "uploaded_product_asset"
+      },
+      "checks": ["数据以实测为准"],
+      "source": "LLM 原创结构"
+    },
+    {
+      "id": "scene_04",
+      "index": 4,
+      "title": "反转·短板",
+      "start": 35,
+      "end": 48,
+      "duration": 13,
+      "voiceover": "但话说回来它也有短板：机身偏重，单手久握会累，追求轻薄的人要掂量一下。",
+      "subtitle": "短板也说清楚：机身偏重",
+      "visual": {
+        "type": "产品图",
+        "layout": "center",
+        "headline": "短板：有点压手",
+        "detail": "重量偏沉，轻薄党慎选",
+        "asset": "uploaded_product_asset"
+      },
+      "checks": ["诚实讲短板"],
+      "source": "LLM 原创结构"
+    },
+    {
+      "id": "scene_05",
+      "index": 5,
+      "title": "结尾·结论+互动",
+      "start": 48,
+      "end": 60,
+      "duration": 12,
+      "voiceover": "所以要续航和影像、不在意重量，它值得入手；想要轻就再等等。觉得有用点个关注。",
+      "subtitle": "要续航就入，想轻再等",
+      "visual": {
+        "type": "结论卡",
+        "layout": "center",
+        "headline": "买不买看这句",
+        "detail": "重续航影像就值，追轻薄再等",
+        "asset": "uploaded_product_asset"
+      },
+      "checks": ["明确购买结论", "一句互动引导"],
+      "source": "LLM 原创结构"
+    }
+  ]
+}

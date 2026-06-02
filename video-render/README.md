@@ -5,9 +5,10 @@
 它跑在你的 **GPU 台式机（RTX 5060）** 上，主站点（Cloudflare）只负责生成脚本/Timeline，
 **长时间渲染必须放外部 worker**。
 
-> 当前状态：**渲染管线地基**。`index.html` 是一套验证过风格的 9:16 竖屏样例模板
-> （产品图 Ken Burns + 参数卡数字滚动 + 进度条 + 逐句字幕）。后续会改成由
-> Timeline JSON 自动生成，并接 `/api/render` 转发。
+> 当前状态：**Timeline JSON → HTML 自动生成已打通**。`build.mjs` 把导演台的
+> Timeline JSON 自动转成 9:16 合成 HTML（每个分镜一段 `.scene.clip`，按 `data-start`
+> 平铺，配 Ken Burns + 标题/字幕淡入 + 数字高亮）。`index.html` 即由
+> `samples/timeline.sample.json` 生成的演示产物。下一步接 `/api/render` 转发 + 配音校准。
 
 ---
 
@@ -34,6 +35,28 @@
 | 中文字体 | 必需 | 否则中文渲染成方块，见下方「中文字体」 |
 
 `npx hyperframes doctor` 可一键自检上面这些。
+
+---
+
+## Timeline JSON → HTML（自动生成）
+
+把导演台导出的 Timeline JSON 一键转成可渲染的合成 HTML：
+
+```bash
+cd video-render
+node build.mjs --in samples/timeline.sample.json --out index.html --assets assets
+bash render.sh            # 再渲成 MP4
+```
+
+- 输入：`{ project, insights, timeline[] }`（导演台 `generate-timeline` 的产物）。
+- 每个 `timeline[i]` → 一段 `.scene.clip`：背景层（`visual.asset` 命中 `assets/` 里的图就用，
+  否则纯渐变背景）+ 渐变遮罩 + 标题(`visual.headline`)/副标题(`visual.detail`)/字幕(`subtitle`∨`voiceover`)。
+- 动画数据驱动：产品图 Ken Burns、标题/字幕逐镜淡入；字幕里的「数字+单位」（如 `12 小时`/`20%`）自动高亮。
+- **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕。
+- **确定性**：不用 `Date.now()`/`Math.random()`，相同输入产出相同 HTML（符合 HyperFrames 渲染要求）。
+- `index.html` 顶部标了「由 build.mjs 自动生成，请勿手改」——要改样式/动画请改 `build.mjs`。
+
+`buildHtml(timeline, { assetsDir })` 也作为 ES 模块导出，供后续渲染 worker 程序化调用。
 
 ---
 
@@ -105,7 +128,10 @@ export HYPERFRAMES_BROWSER_PATH=$PRODUCER_HEADLESS_SHELL_PATH
 
 ```
 video-render/
-  index.html        # 9:16 合成模板（样例：续航参数卡 + 字幕）
+  build.mjs          # Timeline JSON → 合成 HTML 生成器（核心）
+  samples/
+    timeline.sample.json  # 示例 Timeline（5 镜，结构同导演台产物）
+  index.html         # 由 build.mjs 从样例生成的演示合成（请勿手改）
   assets/
     product.jpg      # 占位产品图（正式用换成实拍/抠图/官方素材）
   hyperframes.json   # HyperFrames 项目配置
@@ -118,7 +144,7 @@ video-render/
 
 ## 路线（后续 PR）
 
-1. **Timeline → 模板生成**：把导演台的 Timeline JSON 自动转成这套 HTML（每镜一段 clip）。
+1. ~~**Timeline → 模板生成**：把导演台的 Timeline JSON 自动转成这套 HTML（每镜一段 clip）。~~ ✅ 本 PR 已完成（`build.mjs`）。
 2. **配音对齐**：复用 `/api/tts`（含克隆音色）合成每镜音频，按真实时长校准 `data-duration`；
    可选 `hyperframes transcribe` 出逐词时间戳做卡拉OK字幕。
 3. **`/api/render` 转发**：主站点加渲染按钮，用 `RENDER_URL` 转发到本 worker（与 `VOICE_CLONE_URL` 并列），
