@@ -2,7 +2,8 @@ const initialState = {
   layout: "center",
   currentScene: 0,
   assets: [],
-  timeline: []
+  timeline: [],
+  generated: false
 };
 
 const modules = [
@@ -36,17 +37,19 @@ const els = {
   zhihuResults: document.querySelector("#zhihuResults"),
   assetInput: document.querySelector("#assetInput"),
   assetStrip: document.querySelector("#assetStrip"),
-  analyzeBtn: document.querySelector("#analyzeBtn"),
-  generateBtn: document.querySelector("#generateBtn"),
-  resetBtn: document.querySelector("#resetBtn"),
+  oneClickBtn: document.querySelector("#oneClickBtn"),
+  regenerateBtn: document.querySelector("#regenerateBtn"),
+  addSceneBtn: document.querySelector("#addSceneBtn"),
+  advToggle: document.querySelector("#advToggle"),
+  advPanel: document.querySelector("#advPanel"),
+  cueHint: document.querySelector("#cueHint"),
   copyPromptBtn: document.querySelector("#copyPromptBtn"),
   downloadJsonBtn: document.querySelector("#downloadJsonBtn"),
   downloadBriefBtn: document.querySelector("#downloadBriefBtn"),
-  scriptList: document.querySelector("#scriptList"),
-  timelineList: document.querySelector("#timelineList"),
-  timelineRuler: document.querySelector("#timelineRuler"),
+  track: document.querySelector("#track"),
+  trackRuler: document.querySelector("#trackRuler"),
+  clipEditor: document.querySelector("#clipEditor"),
   jsonOutput: document.querySelector("#jsonOutput"),
-  moduleList: document.querySelector("#moduleList"),
   apiStatus: document.querySelector("#apiStatus"),
   apiBase: document.querySelector("#apiBase"),
   sceneCount: document.querySelector("#sceneCount"),
@@ -239,6 +242,10 @@ function setApiStatus(text) {
   if (els.apiStatus) els.apiStatus.textContent = text;
 }
 
+function setCueHint(text) {
+  if (els.cueHint) els.cueHint.textContent = text;
+}
+
 const API_BASE_KEY = "apiBase";
 
 function getApiBase() {
@@ -308,21 +315,26 @@ function normalizeTimelineData(data) {
   };
 }
 
+function setBusy(busy) {
+  [els.oneClickBtn, els.regenerateBtn, els.zhihuSearchBtn].forEach((button) => {
+    if (button) button.disabled = busy;
+  });
+}
+
 async function generateTimelineFromApi() {
   const apiBase = getApiBase();
 
   if (!apiBase && location.protocol === "file:") {
     initialState.timeline = buildTimeline();
     initialState.currentScene = 0;
+    initialState.generated = true;
     setApiStatus("本地模拟");
     renderAll(false);
     return;
   }
 
   setApiStatus("生成中");
-  [els.analyzeBtn, els.generateBtn].forEach((button) => {
-    button.disabled = true;
-  });
+  setBusy(true);
 
   try {
     const response = await fetch(`${apiBase}/api/generate-timeline`, {
@@ -338,19 +350,52 @@ async function generateTimelineFromApi() {
     }
     initialState.timeline = normalizeTimelineData(data);
     initialState.currentScene = 0;
+    initialState.generated = true;
     setApiStatus(apiBase ? "Codespaces 后端" : "Cloudflare API");
     renderAll(false);
   } catch (error) {
     console.warn(error);
     initialState.timeline = buildTimeline();
     initialState.currentScene = 0;
+    initialState.generated = true;
     setApiStatus("本地兜底");
     renderAll(false);
   } finally {
-    [els.analyzeBtn, els.generateBtn].forEach((button) => {
-      button.disabled = false;
-    });
+    setBusy(false);
   }
+}
+
+async function oneClickGenerate() {
+  const product = els.productName.value.trim();
+  if (!product) {
+    setCueHint("请先输入产品名，例如：华为Nova16");
+    els.productName.focus();
+    return;
+  }
+  setBusy(true);
+  if (!els.zhihuQuery.value.trim()) {
+    setCueHint("正在搜索知乎，抓取真实素材…");
+    try {
+      await searchZhihu({ silent: true });
+    } catch (error) {
+      console.warn(error);
+    }
+  } else {
+    setCueHint("正在搜索知乎，抓取真实素材…");
+    try {
+      await searchZhihu({ silent: true });
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+  setCueHint("正在用 MiMo 生成分镜，请稍候…");
+  await generateTimelineFromApi();
+  setCueHint(
+    initialState.generated
+      ? "生成完成 ✓ 拖动卡片调整顺序，点击卡片在下方编辑文案与时长。"
+      : "已生成示例分镜。"
+  );
+  setBusy(false);
 }
 
 function escapeHtml(value) {
@@ -379,7 +424,8 @@ function renderZhihuResults(items) {
     .join("");
 }
 
-async function searchZhihu() {
+async function searchZhihu(options = {}) {
+  const silent = options.silent === true;
   const query = (els.zhihuQuery && els.zhihuQuery.value.trim()) || els.productName.value.trim();
   if (!query) {
     setApiStatus("请先填关键词或产品名");
@@ -412,7 +458,6 @@ async function searchZhihu() {
     renderZhihuResults(items);
     if (data.material) {
       els.reviewInput.value = data.material;
-      renderAll(true);
     }
     setApiStatus(items.length ? `知乎素材已载入 ${items.length} 条` : "知乎无结果");
   } catch (error) {
@@ -421,6 +466,7 @@ async function searchZhihu() {
     if (els.zhihuResults) {
       els.zhihuResults.innerHTML = `<div class="zhihu-hint">${escapeHtml(error.message || "知乎搜索失败")}</div>`;
     }
+    if (!silent) throw error;
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -431,12 +477,9 @@ function productPrefix() {
 }
 
 function renderAssets() {
+  if (!els.assetStrip) return;
   els.assetStrip.innerHTML = "";
   if (!initialState.assets.length) {
-    const empty = document.createElement("div");
-    empty.className = "asset-thumb";
-    empty.textContent = "暂无";
-    els.assetStrip.appendChild(empty);
     return;
   }
 
@@ -455,70 +498,230 @@ function renderAssets() {
   });
 }
 
-function renderModuleList() {
-  els.moduleList.innerHTML = "";
-  modules.forEach((module) => {
-    const row = document.createElement("div");
-    row.className = "module-row";
-    row.innerHTML = `<strong>${module.name}</strong><span>${module.value}</span>`;
-    els.moduleList.appendChild(row);
+/* ---- 时间线重算与编辑 ---- */
+
+function recalcTimeline() {
+  const data = initialState.timeline;
+  if (!data || !Array.isArray(data.timeline)) return;
+  let cursor = 0;
+  data.timeline.forEach((scene, i) => {
+    const dur = Math.max(2, Number(scene.duration) || 5);
+    scene.duration = Number(dur.toFixed(2));
+    scene.start = Number(cursor.toFixed(2));
+    cursor += dur;
+    scene.end = Number(cursor.toFixed(2));
+    scene.index = i + 1;
+    scene.id = `scene_${String(i + 1).padStart(2, "0")}`;
   });
+  data.project.targetDuration = Number(cursor.toFixed(2));
 }
 
-function renderScript(timelineData) {
-  const timeline = timelineData.timeline;
-  els.scriptList.innerHTML = "";
+function moveScene(from, to) {
+  const t = initialState.timeline.timeline;
+  if (from === to || from < 0 || to < 0 || from >= t.length || to >= t.length) return;
+  const [moved] = t.splice(from, 1);
+  t.splice(to, 0, moved);
+  recalcTimeline();
+  initialState.currentScene = to;
+  renderAll(false);
+}
+
+function addScene() {
+  const t = initialState.timeline.timeline;
+  const at = initialState.currentScene + 1;
+  const scene = {
+    id: "",
+    index: 0,
+    title: "新镜头",
+    start: 0,
+    end: 0,
+    duration: 8,
+    voiceover: "在这里输入这一镜的口播文案。",
+    subtitle: "在这里输入这一镜的口播文案。",
+    visual: {
+      type: "信息板",
+      layout: initialState.layout,
+      headline: "画面标题",
+      detail: "画面说明",
+      asset: "uploaded_product_asset"
+    },
+    checks: ["人工复核"],
+    source: "手动添加"
+  };
+  t.splice(at, 0, scene);
+  recalcTimeline();
+  initialState.currentScene = at;
+  renderAll(false);
+}
+
+function deleteScene(index) {
+  const t = initialState.timeline.timeline;
+  if (t.length <= 1) {
+    setApiStatus("至少保留一个镜头");
+    return;
+  }
+  t.splice(index, 1);
+  recalcTimeline();
+  initialState.currentScene = Math.min(index, t.length - 1);
+  renderAll(false);
+}
+
+/* ---- 渲染 ---- */
+
+function renderTrackRuler(data) {
+  if (!els.trackRuler) return;
+  const total = data.project.targetDuration || 90;
+  els.trackRuler.innerHTML = "";
+  for (let i = 0; i <= 5; i += 1) {
+    const tick = document.createElement("span");
+    tick.textContent = `${Math.round((total / 5) * i)}s`;
+    els.trackRuler.appendChild(tick);
+  }
+}
+
+function renderTrack(data) {
+  const timeline = data.timeline;
+  const total = data.project.targetDuration || timeline.reduce((sum, s) => sum + s.duration, 0) || 90;
+  els.track.innerHTML = "";
   timeline.forEach((scene, index) => {
-    const card = document.createElement("article");
-    card.className = `scene-card ${index === initialState.currentScene ? "active" : ""}`;
-    card.addEventListener("click", () => {
+    const clip = document.createElement("div");
+    clip.className = `clip ${index === initialState.currentScene ? "active" : ""}`;
+    clip.style.flexGrow = String(Math.max(scene.duration, 2));
+    clip.draggable = true;
+    clip.dataset.index = String(index);
+    clip.innerHTML = `
+      <div class="clip-top">
+        <span class="clip-no">${scene.index}</span>
+        <span class="clip-dur">${Math.round(scene.duration)}s</span>
+      </div>
+      <div class="clip-title">${escapeHtml(scene.title)}</div>
+      <div class="clip-vo">${escapeHtml(scene.voiceover)}</div>
+    `;
+    clip.addEventListener("click", () => {
       initialState.currentScene = index;
       renderAll(false);
     });
-    card.innerHTML = `
-      <header>
-        <h3>${scene.index}. ${scene.title}</h3>
-        <span class="tagline">${scene.source}</span>
-      </header>
-      <p>${scene.voiceover}</p>
-    `;
-    els.scriptList.appendChild(card);
+    clip.addEventListener("dragstart", (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(index));
+      clip.classList.add("dragging");
+    });
+    clip.addEventListener("dragend", () => clip.classList.remove("dragging"));
+    clip.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      clip.classList.add("drop-target");
+    });
+    clip.addEventListener("dragleave", () => clip.classList.remove("drop-target"));
+    clip.addEventListener("drop", (event) => {
+      event.preventDefault();
+      clip.classList.remove("drop-target");
+      const from = Number(event.dataTransfer.getData("text/plain"));
+      moveScene(from, index);
+    });
+    els.track.appendChild(clip);
   });
-
-  els.sceneCount.textContent = timeline.length;
-  els.durationCount.textContent = `${Math.round(timelineData.project.targetDuration)}s`;
-  els.sourceCount.textContent = timelineData.insights.sourceCount;
 }
 
-function renderTimeline(timelineData) {
-  const timeline = timelineData.timeline;
-  const total = timelineData.project.targetDuration;
-  els.timelineRuler.innerHTML = "";
-  for (let i = 0; i < 6; i += 1) {
-    const tick = document.createElement("span");
-    tick.textContent = `${Math.round((total / 5) * i)}s`;
-    els.timelineRuler.appendChild(tick);
+function renderClipEditor(data) {
+  const timeline = data.timeline;
+  const scene = timeline[initialState.currentScene] || timeline[0];
+  if (!scene) {
+    els.clipEditor.innerHTML = "";
+    return;
   }
 
-  els.timelineList.innerHTML = "";
-  timeline.forEach((scene) => {
-    const row = document.createElement("div");
-    row.className = "timeline-item";
-    const width = Math.max(8, (scene.duration / total) * 100);
-    row.innerHTML = `
-      <div class="timeline-label">${scene.id}</div>
-      <div class="timeline-track">
-        <div class="timeline-bar" style="width:${width}%">${scene.visual.type}</div>
-      </div>
-      <div class="timeline-time">${scene.start.toFixed(1)}-${scene.end.toFixed(1)}s</div>
-    `;
-    els.timelineList.appendChild(row);
+  els.clipEditor.innerHTML = `
+    <div class="ce-head">
+      <span class="ce-badge">镜头 ${scene.index} / ${timeline.length}</span>
+      <span class="tagline">${escapeHtml(scene.source || "")}</span>
+    </div>
+    <label class="ce-field">
+      <span>标题</span>
+      <input id="ceTitle" type="text" value="${escapeHtml(scene.title)}" />
+    </label>
+    <div class="ce-grid">
+      <label class="ce-field">
+        <span>时长 (秒)</span>
+        <input id="ceDuration" type="number" min="2" step="1" value="${Math.round(scene.duration)}" />
+      </label>
+      <label class="ce-field">
+        <span>画面类型</span>
+        <input id="ceType" type="text" value="${escapeHtml(scene.visual.type)}" />
+      </label>
+    </div>
+    <label class="ce-field">
+      <span>画面标题</span>
+      <input id="ceHeadline" type="text" value="${escapeHtml(scene.visual.headline)}" />
+    </label>
+    <label class="ce-field">
+      <span>画面说明</span>
+      <input id="ceDetail" type="text" value="${escapeHtml(scene.visual.detail)}" />
+    </label>
+    <label class="ce-field">
+      <span>口播文案</span>
+      <textarea id="ceVoiceover" rows="5">${escapeHtml(scene.voiceover)}</textarea>
+    </label>
+    <div class="ce-actions">
+      <button class="icon-button danger" id="ceDelete" type="button">
+        <i data-lucide="trash-2"></i><span>删除此镜头</span>
+      </button>
+    </div>
+  `;
+
+  const liveUpdate = () => {
+    renderTrack(initialState.timeline);
+    renderPreview(initialState.timeline);
+  };
+
+  const ceTitle = els.clipEditor.querySelector("#ceTitle");
+  const ceType = els.clipEditor.querySelector("#ceType");
+  const ceHeadline = els.clipEditor.querySelector("#ceHeadline");
+  const ceDetail = els.clipEditor.querySelector("#ceDetail");
+  const ceVoiceover = els.clipEditor.querySelector("#ceVoiceover");
+  const ceDuration = els.clipEditor.querySelector("#ceDuration");
+  const ceDelete = els.clipEditor.querySelector("#ceDelete");
+
+  ceTitle.addEventListener("input", (event) => {
+    scene.title = event.target.value;
+    liveUpdate();
   });
+  ceType.addEventListener("input", (event) => {
+    scene.visual.type = event.target.value;
+    liveUpdate();
+  });
+  ceHeadline.addEventListener("input", (event) => {
+    scene.visual.headline = event.target.value;
+    liveUpdate();
+  });
+  ceDetail.addEventListener("input", (event) => {
+    scene.visual.detail = event.target.value;
+    liveUpdate();
+  });
+  ceVoiceover.addEventListener("input", (event) => {
+    scene.voiceover = event.target.value;
+    scene.subtitle = event.target.value;
+    liveUpdate();
+  });
+  ceDuration.addEventListener("change", (event) => {
+    scene.duration = Math.max(2, Number(event.target.value) || scene.duration);
+    recalcTimeline();
+    renderAll(false);
+  });
+  ceDelete.addEventListener("click", () => deleteScene(initialState.currentScene));
+
+  if (window.lucide) window.lucide.createIcons();
 }
 
-function renderJson(timelineData) {
+function renderMetrics(data) {
+  if (els.sceneCount) els.sceneCount.textContent = data.timeline.length;
+  if (els.durationCount) els.durationCount.textContent = `${Math.round(data.project.targetDuration)}s`;
+  if (els.sourceCount) els.sourceCount.textContent = data.insights.sourceCount;
+}
+
+function renderJson(data) {
+  if (!els.jsonOutput) return;
   const hyperframesPlan = {
-    ...timelineData,
+    ...data,
     hyperframes: {
       composition: "index.html",
       width: 1080,
@@ -537,12 +740,12 @@ function renderJson(timelineData) {
   els.jsonOutput.textContent = JSON.stringify(hyperframesPlan, null, 2);
 }
 
-function renderPreview(timelineData) {
-  const timeline = timelineData.timeline;
+function renderPreview(data) {
+  const timeline = data.timeline;
   const scene = timeline[initialState.currentScene] || timeline[0];
   if (!scene) return;
 
-  els.stageProduct.textContent = timelineData.project.product || "3C 产品";
+  els.stageProduct.textContent = data.project.product || "3C 产品";
   els.stageTime.textContent = formatTime(scene.start);
   els.visualType.textContent = scene.visual.type;
   els.visualHeadline.textContent = scene.visual.headline;
@@ -569,7 +772,9 @@ function renderPreview(timelineData) {
 
 function formatTime(value) {
   const seconds = Math.max(0, Math.round(value));
-  return `00:${String(seconds).padStart(2, "0")}`;
+  const mm = Math.floor(seconds / 60);
+  const ss = seconds % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
 function renderAll(rebuild = true) {
@@ -578,22 +783,17 @@ function renderAll(rebuild = true) {
   if (rebuild || !hasScenes) {
     initialState.timeline = buildTimeline();
   }
-  renderScript(initialState.timeline);
-  renderTimeline(initialState.timeline);
-  renderJson(initialState.timeline);
-  renderPreview(initialState.timeline);
-  renderModuleList();
-  if (window.lucide) window.lucide.createIcons();
-}
+  const len = initialState.timeline.timeline.length;
+  if (initialState.currentScene >= len) initialState.currentScene = Math.max(0, len - 1);
+  if (initialState.currentScene < 0) initialState.currentScene = 0;
 
-function setTab(name) {
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.tab === name);
-  });
-  document.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.classList.remove("active");
-  });
-  document.querySelector(`#${name}Tab`).classList.add("active");
+  renderTrackRuler(initialState.timeline);
+  renderTrack(initialState.timeline);
+  renderClipEditor(initialState.timeline);
+  renderPreview(initialState.timeline);
+  renderMetrics(initialState.timeline);
+  renderJson(initialState.timeline);
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function setLayout(layout) {
@@ -601,7 +801,21 @@ function setLayout(layout) {
   document.querySelectorAll(".segment").forEach((segment) => {
     segment.classList.toggle("active", segment.dataset.layout === layout);
   });
-  renderAll(true);
+  if (initialState.timeline && Array.isArray(initialState.timeline.timeline)) {
+    initialState.timeline.project.layout = layout;
+  }
+  renderPreview(initialState.timeline);
+}
+
+function toggleAdvanced() {
+  const open = els.advPanel.hasAttribute("hidden");
+  if (open) {
+    els.advPanel.removeAttribute("hidden");
+  } else {
+    els.advPanel.setAttribute("hidden", "");
+  }
+  els.advToggle.setAttribute("aria-expanded", String(open));
+  els.advToggle.classList.toggle("active", open);
 }
 
 function downloadFile(filename, content, type = "application/json") {
@@ -656,35 +870,34 @@ function downloadBrief() {
 }
 
 function bindEvents() {
-  els.analyzeBtn.addEventListener("click", generateTimelineFromApi);
-  els.generateBtn.addEventListener("click", generateTimelineFromApi);
-  if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", searchZhihu);
-  els.resetBtn.addEventListener("click", () => {
-    initialState.assets.forEach((asset) => URL.revokeObjectURL(asset.url));
-    initialState.assets = [];
-    initialState.currentScene = 0;
-    els.assetInput.value = "";
-    renderAssets();
-    renderAll(true);
+  els.oneClickBtn.addEventListener("click", oneClickGenerate);
+  els.regenerateBtn.addEventListener("click", generateTimelineFromApi);
+  els.addSceneBtn.addEventListener("click", addScene);
+  els.advToggle.addEventListener("click", toggleAdvanced);
+  if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", () => searchZhihu());
+
+  els.productName.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      oneClickGenerate();
+    }
   });
 
-  els.assetInput.addEventListener("change", (event) => {
-    initialState.assets.forEach((asset) => URL.revokeObjectURL(asset.url));
-    initialState.assets = [...event.target.files].map((file) => ({
-      name: file.name,
-      type: file.type,
-      url: URL.createObjectURL(file)
-    }));
-    renderAssets();
-    renderAll(true);
-  });
+  if (els.assetInput) {
+    els.assetInput.addEventListener("change", (event) => {
+      initialState.assets.forEach((asset) => URL.revokeObjectURL(asset.url));
+      initialState.assets = [...event.target.files].map((file) => ({
+        name: file.name,
+        type: file.type,
+        url: URL.createObjectURL(file)
+      }));
+      renderAssets();
+      renderPreview(initialState.timeline);
+    });
+  }
 
   document.querySelectorAll(".segment").forEach((button) => {
     button.addEventListener("click", () => setLayout(button.dataset.layout));
-  });
-
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.addEventListener("click", () => setTab(button.dataset.tab));
   });
 
   els.prevSceneBtn.addEventListener("click", () => {
@@ -716,10 +929,6 @@ function bindEvents() {
     } catch {
       downloadFile("3c-prompt.txt", prompt, "text/plain");
     }
-  });
-
-  [els.productName, els.category, els.targetDuration, els.platform, els.factsInput, els.reviewInput].forEach((input) => {
-    input.addEventListener("change", () => renderAll(true));
   });
 
   if (els.apiBase) {
