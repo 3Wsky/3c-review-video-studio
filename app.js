@@ -61,6 +61,7 @@ const els = {
   oneClickBtn: document.querySelector("#oneClickBtn"),
   regenerateBtn: document.querySelector("#regenerateBtn"),
   addSceneBtn: document.querySelector("#addSceneBtn"),
+  checkupBtn: document.querySelector("#checkupBtn"),
   resetBtn: document.querySelector("#resetBtn"),
   advToggle: document.querySelector("#advToggle"),
   advPanel: document.querySelector("#advPanel"),
@@ -1226,6 +1227,244 @@ function exportShotlist() {
   downloadFile(`${safeName()}_分镜表.csv`, csv, "text/csv;charset=utf-8");
 }
 
+/* ---- 留人体检：纯前端启发式给脚本打"留人分" + 逐镜诊断 ---- */
+const HOOK_WORDS = ["别急", "先别", "别划", "别走", "居然", "竟然", "没想到", "真相", "千万", "避坑", "踩坑", "后悔", "为什么", "凭什么", "到底", "一个字", "反常识", "真的假的", "谁懂", "震惊", "离谱", "劝你", "原来", "结果", "都说", "你以为"];
+const LOOP_WORDS = ["往下看", "接着看", "别走", "别划", "关键", "重点", "到底", "一旦", "你猜", "接下来", "敲黑板", "注意看", "马上", "下一个", "继续看", "看完", "后面", "更"];
+const CTA_WORDS = ["关注", "点赞", "评论", "收藏", "转发", "三连", "下一个", "留言", "扣", "抽", "主页", "蹲", "催更"];
+const CONCLUSION_WORDS = ["结论", "建议", "值得", "入手", "推荐", "别买", "再等", "闭眼", "观望", "总结", "适合"];
+
+function hasWord(text, words) {
+  const t = String(text || "");
+  return words.some((w) => t.includes(w));
+}
+function firstSentence(text) {
+  return String(text || "").split(/[。！？!?，,；;]/).map((s) => s.trim()).filter(Boolean)[0] || "";
+}
+function charCount(text) {
+  return String(text || "").replace(/\s/g, "").length;
+}
+function clampScore(n) {
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+function gradeOf(score) {
+  if (score >= 85) return { label: "优秀", tone: "good" };
+  if (score >= 70) return { label: "良好", tone: "ok" };
+  if (score >= 55) return { label: "及格", tone: "warn" };
+  return { label: "待优化", tone: "bad" };
+}
+// 镜头结尾是否留了承接钩子：开放回路词、强钩子词或疑问句都算
+function sceneHasContinuation(text) {
+  return hasWord(text, LOOP_WORDS) || hasWord(text, HOOK_WORDS) || /[？?]/.test(String(text || ""));
+}
+
+function scoreRetention(data) {
+  const tl = (data && Array.isArray(data.timeline) ? data.timeline : []) || [];
+  const total = tl.length;
+  const target = (data.project && data.project.targetDuration) || tl.reduce((s, x) => s + (Number(x.duration) || 0), 0) || 90;
+
+  const scenes = tl.map((scene, i) => {
+    const isFirst = i === 0;
+    const isLast = i === total - 1;
+    const dur = Number(scene.duration) || (scene.end - scene.start) || 0;
+    const chars = charCount(scene.voiceover);
+    const rate = dur > 0 ? chars / dur : 0;
+    const issues = [];
+    if (isFirst) {
+      if (dur > 6) issues.push(`开场 ${Math.round(dur)}s 偏长，钩子镜建议压到 3-6s`);
+      if (!hasWord(scene.voiceover, HOOK_WORDS)) issues.push("开场缺少强钩子词（反常识/痛点/疑问），容易被划走");
+      if (charCount(firstSentence(scene.voiceover)) > 24) issues.push("第一句太长，5 秒内抓不住人，建议拆成短句");
+    }
+    if (!isLast && total > 1) {
+      if (!sceneHasContinuation(scene.voiceover)) {
+        issues.push("结尾没有承接钩子/悬念，观众可能划走");
+      }
+    }
+    if (!isFirst && dur > 28) issues.push(`时长 ${Math.round(dur)}s 偏长，注意力易流失，建议拆分或压缩`);
+    if (rate > 7) issues.push(`文案偏多（约 ${rate.toFixed(1)} 字/秒），可能念不完，建议精简`);
+    else if (dur >= 6 && rate > 0 && rate < 2.8) issues.push(`文案偏少（约 ${rate.toFixed(1)} 字/秒），画面会空，建议补充或缩短时长`);
+    if (isLast) {
+      if (!hasWord(scene.voiceover, CTA_WORDS)) issues.push("结尾缺少互动引导（关注/点赞/评论）");
+      if (!hasWord(scene.voiceover, CONCLUSION_WORDS)) issues.push("结尾没有给出明确购买结论/建议");
+    }
+    const score = clampScore(100 - issues.length * 22);
+    return { index: scene.index || i + 1, title: scene.title, score, issues, isWeak: score < 70, ref: scene, pos: i };
+  });
+
+  // 维度分
+  const first = tl[0];
+  let hook = 60;
+  if (first) {
+    const d = Number(first.duration) || 0;
+    hook += d <= 6 ? 20 : d <= 8 ? 10 : 0;
+    hook += hasWord(first.voiceover, HOOK_WORDS) ? 20 : 0;
+    if (charCount(firstSentence(first.voiceover)) > 24) hook -= 10;
+  }
+  hook = clampScore(hook);
+
+  const midScenes = tl.slice(0, Math.max(0, total - 1));
+  const loopHit = midScenes.filter((s) => sceneHasContinuation(s.voiceover)).length;
+  const curve = midScenes.length ? clampScore((loopHit / midScenes.length) * 100) : 100;
+
+  const durs = tl.map((s) => Number(s.duration) || (s.end - s.start) || 0);
+  let pacing = 100;
+  const longCount = tl.filter((s, i) => i > 0 && (Number(s.duration) || 0) > 28).length;
+  pacing -= longCount * 18;
+  const positive = durs.filter((x) => x > 0);
+  const maxD = positive.length ? Math.max(...positive) : 0;
+  const minD = positive.length ? Math.min(...positive) : 0;
+  const tooFlat = durs.length > 2 && minD > 0 && maxD / minD < 1.4;
+  if (tooFlat) pacing -= 20;
+  pacing = clampScore(pacing);
+
+  const last = tl[total - 1];
+  let ending = 40;
+  if (last) {
+    ending += hasWord(last.voiceover, CTA_WORDS) ? 35 : 0;
+    ending += hasWord(last.voiceover, CONCLUSION_WORDS) ? 25 : 0;
+  }
+  ending = clampScore(ending);
+
+  const rateBad = tl.filter((s) => {
+    const d = Number(s.duration) || 0;
+    const r = d > 0 ? charCount(s.voiceover) / d : 0;
+    return r > 7 || (d >= 6 && r > 0 && r < 2.8);
+  }).length;
+  let length = total ? clampScore((1 - rateBad / total) * 100) : 100;
+  const totalDur = durs.reduce((a, b) => a + b, 0);
+  const offTarget = target && Math.abs(totalDur - target) / target > 0.15;
+  if (offTarget) length = clampScore(length - 15);
+
+  const dims = [
+    { key: "hook", label: "开场 5 秒钩子", score: hook, weight: 0.3, note: hook >= 80 ? "开场强钩子，留人到位" : hook >= 60 ? "开场钩子一般，可更抓人" : "开场偏弱，前 5 秒易流失" },
+    { key: "curve", label: "钩子连贯 · 不停留人", score: curve, weight: 0.25, note: `${loopHit}/${midScenes.length || 0} 个镜头结尾有承接钩子` },
+    { key: "pacing", label: "节奏拉扯", score: pacing, weight: 0.2, note: longCount ? `${longCount} 个镜头偏长` : tooFlat ? "节奏太平，缺少长短拉扯" : "长短分布合理" },
+    { key: "ending", label: "结尾结论 + 互动", score: ending, weight: 0.15, note: ending >= 80 ? "结论清晰且有互动引导" : "结尾可补结论或互动引导" },
+    { key: "length", label: "语速 / 时长匹配", score: length, weight: 0.1, note: rateBad ? `${rateBad} 个镜头语速不合适` : offTarget ? "总时长偏离目标" : "语速与时长匹配" }
+  ];
+  const overall = clampScore(dims.reduce((s, d) => s + d.score * d.weight, 0));
+  return { overall, grade: gradeOf(overall), dims, scenes };
+}
+
+function toneColor(tone) {
+  return tone === "good" ? "var(--teal)" : tone === "ok" ? "var(--blue)" : tone === "warn" ? "var(--amber)" : "var(--red)";
+}
+function scoreTone(score) {
+  return score >= 85 ? "good" : score >= 70 ? "ok" : score >= 55 ? "warn" : "bad";
+}
+
+let checkupMask = null;
+
+function closeCheckup() {
+  if (checkupMask) {
+    checkupMask.remove();
+    checkupMask = null;
+    document.removeEventListener("keydown", onCheckupKey);
+  }
+}
+function onCheckupKey(event) {
+  if (event.key === "Escape") closeCheckup();
+}
+
+function openCheckup() {
+  closeCheckup();
+  const data = currentTimeline();
+  const report = scoreRetention(data);
+
+  const mask = document.createElement("div");
+  mask.className = "checkup-mask";
+
+  const ringColor = toneColor(report.grade.tone);
+  const dimsHtml = report.dims
+    .map((d) => {
+      const c = toneColor(scoreTone(d.score));
+      return `
+      <div class="ck-dim">
+        <div class="ck-dim-top"><span>${escapeHtml(d.label)}</span><strong style="color:${c}">${d.score}</strong></div>
+        <div class="ck-bar"><i style="width:${d.score}%;background:${c}"></i></div>
+        <div class="ck-dim-note">${escapeHtml(d.note)}</div>
+      </div>`;
+    })
+    .join("");
+
+  const scenesHtml = report.scenes
+    .map((s) => {
+      const c = toneColor(scoreTone(s.score));
+      const issues = s.issues.length
+        ? `<ul class="ck-issues">${s.issues.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul>`
+        : `<p class="ck-ok">这一镜留人结构没问题 ✓</p>`;
+      const actions = s.issues.length
+        ? `<div class="ck-scene-actions">
+             <button class="icon-button" data-jump="${s.pos}" type="button"><i data-lucide="pencil"></i><span>去编辑</span></button>
+             <button class="icon-button ck-rewrite" data-rewrite="${s.pos}" type="button"><i data-lucide="wand-sparkles"></i><span>重写本镜</span></button>
+           </div>`
+        : "";
+      return `
+      <div class="ck-scene ${s.isWeak ? "is-weak" : ""}">
+        <div class="ck-scene-head">
+          <span class="ck-no">${s.index}</span>
+          <span class="ck-scene-title">${escapeHtml(s.title || "")}</span>
+          <span class="ck-score" style="color:${c};border-color:${c}">${s.score}</span>
+        </div>
+        ${issues}
+        ${actions}
+      </div>`;
+    })
+    .join("");
+
+  mask.innerHTML = `
+    <div class="checkup-card" role="dialog" aria-label="留人体检报告">
+      <div class="checkup-head">
+        <div>
+          <h3><i data-lucide="stethoscope"></i> 留人体检</h3>
+          <p>按短视频留人逻辑（前 5 秒钩子 + 情绪曲线）给当前脚本打分，仅供参考</p>
+        </div>
+        <button class="ck-close" id="ckClose" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      </div>
+      <div class="checkup-body">
+        <div class="ck-overall">
+          <div class="ck-ring" style="background:conic-gradient(${ringColor} ${report.overall * 3.6}deg, rgba(255,255,255,0.08) 0)">
+            <div class="ck-ring-in"><strong>${report.overall}</strong><small style="color:${ringColor}">${report.grade.label}</small></div>
+          </div>
+          <div class="ck-dims">${dimsHtml}</div>
+        </div>
+        <div class="ck-scenes-title">逐镜诊断</div>
+        <div class="ck-scenes">${scenesHtml}</div>
+      </div>
+      <p class="checkup-foot">「重写本镜」会调用 MiMo 只重写该镜（需已部署后端）；评分为启发式规则，最终以你的判断为准。</p>
+    </div>`;
+
+  mask.addEventListener("click", (event) => {
+    if (event.target === mask) closeCheckup();
+  });
+  document.body.appendChild(mask);
+  checkupMask = mask;
+  document.addEventListener("keydown", onCheckupKey);
+
+  mask.querySelector("#ckClose").addEventListener("click", closeCheckup);
+  mask.querySelectorAll("[data-jump]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      initialState.currentScene = Number(btn.dataset.jump);
+      closeCheckup();
+      renderAll(false);
+      if (els.clipEditor) els.clipEditor.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  });
+  mask.querySelectorAll("[data-rewrite]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      initialState.currentScene = Number(btn.dataset.rewrite);
+      closeCheckup();
+      renderAll(false);
+      const rewriteBtn = els.clipEditor && els.clipEditor.querySelector("#ceRewrite");
+      if (rewriteBtn) {
+        if (els.clipEditor) els.clipEditor.scrollIntoView({ behavior: "smooth", block: "center" });
+        rewriteBtn.click();
+      }
+    });
+  });
+
+  if (window.lucide) window.lucide.createIcons();
+}
+
 const DRAFT_KEY = "directorDraft_v1";
 
 function saveDraft() {
@@ -1311,6 +1550,7 @@ function bindEvents() {
   els.oneClickBtn.addEventListener("click", oneClickGenerate);
   els.regenerateBtn.addEventListener("click", generateTimelineFromApi);
   els.addSceneBtn.addEventListener("click", addScene);
+  if (els.checkupBtn) els.checkupBtn.addEventListener("click", openCheckup);
   els.advToggle.addEventListener("click", toggleAdvanced);
   if (els.resetBtn) els.resetBtn.addEventListener("click", resetAll);
   if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", () => searchZhihu());
