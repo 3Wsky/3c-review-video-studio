@@ -1,0 +1,12 @@
+{
+  "name": "3c-video-render",
+  "private": true,
+  "type": "module",
+  "description": "3C 测评短视频渲染 worker（HyperFrames：HTML/CSS/JS → MP4）",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.6.69 preview",
+    "check": "npx --yes hyperframes@0.6.69 lint && npx --yes hyperframes@0.6.69 validate",
+    "render": "npx --yes hyperframes@0.6.69 render -o out.mp4",
+    "render:gpu": "npx --yes hyperframes@0.6.69 render --gpu -o out.mp4"
+  }
+}
