@@ -2,7 +2,7 @@
 
 > 这份文档记录项目的开发进度（已完成 / 进行中 / 待办）、架构、密钥位置和"换电脑如何续上"。
 > **每次有进展都要更新这份文件并提交，** 这样换设备 `git clone` 后就能接着开发。
-> 最近更新：2026-06（克隆音色 CosyVoice 自部署接入）
+> 最近更新：2026-06（视频渲染管线地基：HyperFrames `video-render/`）
 
 ---
 
@@ -40,6 +40,7 @@
 | `OPENAI_MODEL` | `MiMo-V2.5` | 文本生成模型 |
 | `ZHIHU_ACCESS_SECRET` | 知乎 Access Secret（Secret） | 知乎搜索鉴权 |
 | `VOICE_CLONE_URL` | 自部署 CosyVoice 服务的公网地址（可选） | 配置后「我的克隆音色」可用，见 `voice-clone/README.md` |
+| `RENDER_URL` | 自部署视频渲染 worker 的公网地址（可选，未接前端） | 规划中，见 `video-render/README.md` |
 
 > 本地跑 FastAPI 时同名变量放 `backend/.env`（参考 `backend/.env.example`），不要提交真实密钥。
 
@@ -69,14 +70,18 @@
 
 ## 5. 进行中 🚧
 
-- **视频渲染管线**（下一块）：TTS → 字幕对齐 → ffmpeg 渲 MP4 → R2，计划与克隆服务并列跑在同一台自有 GPU 机（RTX 5060，白天在线）。
+- **视频渲染管线**（进行中）：选定 **HyperFrames**（HTML/CSS/JS + GSAP → 逐帧截图 + ffmpeg → MP4）为渲染内核，与克隆服务并列跑在同一台自有 GPU 机（RTX 5060，白天在线）。
+  - [x] **渲染地基**（本 PR）：新建 `video-render/`，含一套验证过风格的 9:16 竖屏样例模板（产品图 Ken Burns + 参数卡数字滚动 + 进度条 + 逐句字幕）+ `render.sh` 一键脚本 + README。结构借鉴 Pixelle-Video 的分层模板（背景层/渐变遮罩/内容层）。`lint`/`validate`/`render` 本机实测通过（8s·1080×1920 MP4）。**坑：HyperFrames 走确定性字体，默认不含中文 → Linux worker 需装 `fonts-noto-cjk` 或模板内嵌 Noto Sans SC，否则中文变方块。**
+  - [ ] Timeline JSON → 自动生成合成 HTML；接配音真实时长校准；`/api/render` 转发（`RENDER_URL`，与 `VOICE_CLONE_URL` 并列）；离线降级。
 
 ---
 
 ## 6. 待办 / 路线图 📋
 
 - [ ] **移动端适配 / 配色微调**（按需）。
-- [ ] **视频渲染管线**（重活，放 Codespaces）：TTS 配音 → WhisperX 逐字字幕对齐 → ffmpeg/HyperFrames 按时间线渲成 MP4 → 上传 R2 → 回链给前端。
+- [ ] **视频渲染管线后续**：Timeline→HyperFrames HTML 自动生成 → `render --gpu`（NVENC）→ R2 → 回链；逐词字幕用 `hyperframes transcribe`（内置 Whisper，替代单独 WhisperX 服务）。
+- [ ] **三项目融合复用**：② 移植 MoneyPrinterTurbo `material.py` 的 Pexels/Pixabay 免费素材源；③ 把 Pixelle 提炼/约束提示词融进 MiMo；④ 用 Pixelle storyboard 模型对齐 Timeline 字段。
+- [ ] **数据可视化参数卡 / 横评对比 / 防垃圾闸门（事实核查+反洗稿）/ 多端裁剪**。
 
 ---
 

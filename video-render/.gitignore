@@ -1,0 +1,8 @@
+# 渲染产物 / 缓存 / 依赖（不入库）
+out.mp4
+*.mp4
+*.webm
+node_modules/
+chrome-headless-shell/
+.hyperframes/
+capture/
