@@ -55,15 +55,18 @@
 - [x] **深色影院风换肤**（PR #6）：黑底 + 紫/粉渐变光晕 + 玻璃拟态，纯 CSS。
 - [x] **三项体验优化**（PR #7）：① 品类按产品名自动推断；② 一键生成 loading 骨架 + 按钮转圈；③ 草稿自动存 localStorage（key `directorDraft_v1`），刷新恢复 + 「重置」按钮。
 - [x] **短视频留人脚本结构**（PR #8）：前 5 秒强钩子（第 1 镜 3-6s）+ 情绪曲线（钩子→痛点→悬念→高潮→反转→结尾互动），每镜结尾留开放回路钩子；分镜标题带节奏标签。已在生产用华为Nova16 验证（60s/90s 都符合）。
+- [x] **进度存档 PROGRESS.md**（PR #9）：记录已完成/进行中/待办 + 架构 + 密钥位置 + 换电脑续接。
+- [x] **TTS 配音试听**（PR #10）：用 MiMo-V2.5-TTS（限时免费）每镜「试听配音」一键出声。
+  - 新增 `functions/api/tts.js`（+ FastAPI `/api/tts` 镜像）：要合成的文本放 `assistant` message，`audio:{format,voice}` 选音色，解析 `message.audio.data`(base64)。
+  - 前端：编辑区「试听配音」按钮 + 高级设置音色选择（冰糖/茉莉/苏打/白桦），结果按 `voice::text` 缓存。复用现有 MiMo key，无新依赖。
+  - 可选环境变量：`OPENAI_TTS_MODEL`（默认 `mimo-v2.5-tts`）、`OPENAI_TTS_VOICE`（默认 `mimo_default`）。
+  - 已在生产用华为Nova16 验证：镜头 1、4 试听均「合成中…→播放中…」真实出声。
 
 ---
 
 ## 5. 进行中 🚧
 
-- [ ] **TTS 配音试听**（当前任务）：用 MiMo-V2.5-TTS（限时免费）把每镜口播转成语音，页面里能试听。
-  - 模型：`mimo-v2.5-tts`（内置音色；另有 `-voicedesign` 文本描述音色、`-voiceclone` 音色克隆）。
-  - 接口形态：走 `chat/completions` 风格 —— **要合成的文本放在 `assistant` 角色的 message**，`user` 角色放风格指令（可选）。
-  - 计划：新增 `functions/api/tts.js`（+ FastAPI 镜像），前端每镜加「试听」按钮播放返回音频。
+- （暂无）下一项待定：一键导出 / 逐镜重生 / 留人体检 / 视频渲染管线（见下）。
 
 ---
 
