@@ -83,6 +83,9 @@ const els = {
   stockGrid: document.querySelector("#stockGrid"),
   stockTip: document.querySelector("#stockTip"),
   autoStockToggle: document.querySelector("#autoStockToggle"),
+  compareSpec: document.querySelector("#compareSpec"),
+  compareInsertBtn: document.querySelector("#compareInsertBtn"),
+  compareTip: document.querySelector("#compareTip"),
   track: document.querySelector("#track"),
   trackRuler: document.querySelector("#trackRuler"),
   clipEditor: document.querySelector("#clipEditor"),
@@ -1466,6 +1469,99 @@ function setStockTip(text) {
   if (els.stockTip) els.stockTip.textContent = text;
 }
 
+/* ---- 横评对比：解析简易 DSL → 插入对比矩阵镜 ---- */
+
+// 解析一行 "维度(单位, 高/低): 值1, 值2, 值3"。返回 {label, unit, better, values}。
+function parseCompareRow(line) {
+  const m = /^(.+?)(?:[（(]([^)）]*)[)）])?\s*[:：]\s*(.+)$/.exec(line);
+  if (!m) return null;
+  const label = m[1].trim();
+  const meta = (m[2] || "").split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  const values = m[3].split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  if (!label || values.length === 0) return null;
+  let unit = "";
+  let better = "high";
+  meta.forEach((tok) => {
+    if (/低|越小|越少|smaller|lower/i.test(tok)) better = "low";
+    else if (/高|越大|越多|bigger|higher/i.test(tok)) better = "high";
+    else if (!unit) unit = tok;
+  });
+  return { label, unit, better, values };
+}
+
+// 解析整段对比 DSL → { products, rows }。
+function parseCompareSpec(text) {
+  const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let products = [];
+  const rows = [];
+  lines.forEach((line) => {
+    if (/^产品[\s]*[:：]/.test(line)) {
+      products = line.replace(/^产品[\s]*[:：]/, "").split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+      return;
+    }
+    const row = parseCompareRow(line);
+    if (row) rows.push(row);
+  });
+  // 没写「产品:」行时，用列数兜底命名
+  if (products.length === 0 && rows.length) {
+    products = rows[0].values.map((_, i) => `产品${i + 1}`);
+  }
+  // 对齐每行列数到 products 数量
+  rows.forEach((r) => {
+    r.values = r.values.slice(0, products.length);
+    while (r.values.length < products.length) r.values.push("—");
+  });
+  return { products, rows: rows.filter((r) => r.values.length === products.length) };
+}
+
+function setCompareTip(text) {
+  if (els.compareTip) els.compareTip.textContent = text;
+}
+
+function insertCompareScene() {
+  if (!initialState.timeline || !Array.isArray(initialState.timeline.timeline) || !initialState.timeline.timeline.length) {
+    setCompareTip("请先生成分镜脚本，再插入对比镜。");
+    return;
+  }
+  const spec = parseCompareSpec(els.compareSpec ? els.compareSpec.value : "");
+  if (spec.products.length < 2) {
+    setCompareTip("至少要 2 个产品。第一行写「产品: A, B, C」，下面每行一个维度。");
+    return;
+  }
+  if (spec.rows.length === 0) {
+    setCompareTip("没解析到对比维度。每行格式：维度(单位, 高/低): 值1, 值2…");
+    return;
+  }
+  const names = spec.products.join(" / ");
+  const t = initialState.timeline.timeline;
+  const at = initialState.currentScene + 1;
+  const scene = {
+    id: "",
+    index: 0,
+    title: "横评对比",
+    start: 0,
+    end: 0,
+    duration: Math.max(8, 4 + spec.rows.length * 1.6),
+    voiceover: `${names}，这几款到底选谁？直接上参数对比，逐项见分晓。`,
+    subtitle: `${spec.products.length} 款横评 · 逐项对比`,
+    visual: {
+      type: "横评对比",
+      layout: initialState.layout,
+      headline: "这几款选谁？",
+      detail: names,
+      asset: "",
+      compare: { products: spec.products, rows: spec.rows }
+    },
+    checks: ["参数以实测/官方为准", "对比项需可溯源"],
+    source: "横评对比矩阵"
+  };
+  t.splice(at, 0, scene);
+  recalcTimeline();
+  initialState.currentScene = at;
+  renderAll(false);
+  setCompareTip(`已插入对比镜（${spec.products.length} 款 × ${spec.rows.length} 项）。可在导演台继续编辑口播/字幕。`);
+}
+
 async function searchStock() {
   const query = (els.stockQuery && els.stockQuery.value.trim()) || "";
   if (!query) {
@@ -2169,6 +2265,7 @@ function bindEvents() {
 
   if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
   if (els.stockSearchBtn) els.stockSearchBtn.addEventListener("click", searchStock);
+  if (els.compareInsertBtn) els.compareInsertBtn.addEventListener("click", insertCompareScene);
   if (els.stockQuery)
     els.stockQuery.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {

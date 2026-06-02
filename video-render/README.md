@@ -55,7 +55,10 @@ bash render.sh            # 再渲成 MP4
 - 动画数据驱动：产品图 Ken Burns、标题/字幕逐镜淡入；字幕里的「数字+单位」（如 `12 小时`/`20%`）自动高亮。
 - **事实溯源角标**：`visual.cite`（或 `scene.cite`，如「实测」「官方规格」）→ 画面左下角渲一条「据：…」出处角标。
 - **素材标记**：`visual.assetSource === "stock"`（B 的 autoStock 自动空镜）→ 右上角标「素材·示意（待替换）」，提醒实拍优先。
-- **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕。
+- **横评对比矩阵**：`visual.compare`（或 `scene.compare`）= `{ products:[...], rows:[{label,unit,better:"high"|"low",values:[...]}] }`
+  → 渲一张对比表：每行按 `better`（`high`=越大越好 / `low`=越小越好）自动判出该维度胜者并金色高亮（带 ✓），
+  综合拿下行数最多的产品在表头戴 👑。前端「横评对比」面板用简易 DSL 生成此结构（`这几款选谁`对比镜）。
+- **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕；`compare` 不足 2 个产品/无有效行则忽略。
 - **确定性**：不用 `Date.now()`/`Math.random()`，相同输入产出相同 HTML（符合 HyperFrames 渲染要求）。
 - `index.html` 顶部标了「由 build.mjs 自动生成，请勿手改」——要改样式/动画请改 `build.mjs`。
 
