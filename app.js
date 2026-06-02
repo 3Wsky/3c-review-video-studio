@@ -331,6 +331,56 @@ function getSelectedVoice() {
   return (els.ttsVoice && els.ttsVoice.value) || "mimo_default";
 }
 
+async function rewriteCurrentScene(scene) {
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    throw new Error("重写需要部署后端（本地 file:// 无法调用）");
+  }
+  const scenes = (initialState.timeline && initialState.timeline.timeline) || [];
+  const pos = scenes.indexOf(scene);
+  const prev = pos > 0 ? scenes[pos - 1] : null;
+  const next = pos >= 0 && pos < scenes.length - 1 ? scenes[pos + 1] : null;
+
+  const response = await fetch(`${apiBase}/api/rewrite-scene`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      productName: els.productName.value.trim(),
+      category: els.category.value,
+      platform: els.platform.value,
+      facts: els.factsInput.value,
+      reviews: els.reviewInput.value,
+      scene: {
+        title: scene.title,
+        duration: scene.duration,
+        start: scene.start,
+        end: scene.end,
+        voiceover: scene.voiceover,
+        visual: scene.visual
+      },
+      prevVoiceover: prev ? prev.voiceover : "",
+      nextTitle: next ? next.title : ""
+    })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.voiceover) {
+    throw new Error(data.error || "重写失败");
+  }
+
+  if (data.title) scene.title = data.title;
+  scene.voiceover = data.voiceover;
+  scene.subtitle = data.subtitle || data.voiceover;
+  scene.visual = scene.visual || {};
+  if (data.visual) {
+    if (data.visual.type) scene.visual.type = data.visual.type;
+    if (data.visual.headline) scene.visual.headline = data.visual.headline;
+    if (data.visual.detail) scene.visual.detail = data.visual.detail;
+  }
+  scene.source = "MiMo 单镜重写";
+  setCueHint(`「${scene.title}」已重写 ✓`);
+  saveDraft();
+}
+
 function normalizeTimelineData(data) {
   const local = buildTimeline();
   const project = {
@@ -751,6 +801,9 @@ function renderClipEditor(data) {
       <textarea id="ceVoiceover" rows="5">${escapeHtml(scene.voiceover)}</textarea>
     </label>
     <div class="ce-actions">
+      <button class="icon-button" id="ceRewrite" type="button" title="只让 MiMo 重写这一镜（保留时长和节奏）">
+        <i data-lucide="wand-sparkles"></i><span>重写本镜</span>
+      </button>
       <button class="icon-button" id="ceListen" type="button" title="用 MiMo-TTS 朗读这一镜口播">
         <i data-lucide="volume-2"></i><span>试听配音</span>
       </button>
@@ -773,6 +826,7 @@ function renderClipEditor(data) {
   const ceDuration = els.clipEditor.querySelector("#ceDuration");
   const ceDelete = els.clipEditor.querySelector("#ceDelete");
   const ceListen = els.clipEditor.querySelector("#ceListen");
+  const ceRewrite = els.clipEditor.querySelector("#ceRewrite");
 
   ceTitle.addEventListener("input", (event) => {
     scene.title = event.target.value;
@@ -801,6 +855,24 @@ function renderClipEditor(data) {
     renderAll(false);
   });
   ceDelete.addEventListener("click", () => deleteScene(initialState.currentScene));
+
+  if (ceRewrite) {
+    ceRewrite.addEventListener("click", async () => {
+      const label = ceRewrite.querySelector("span");
+      const original = label ? label.textContent : "";
+      if (ceRewrite.classList.contains("is-loading")) return;
+      ceRewrite.classList.add("is-loading");
+      if (label) label.textContent = "重写中…";
+      try {
+        await rewriteCurrentScene(scene);
+        renderAll(false);
+      } catch (error) {
+        setCueHint(`重写失败：${error.message}`);
+        ceRewrite.classList.remove("is-loading");
+        if (label) label.textContent = original;
+      }
+    });
+  }
 
   if (ceListen) {
     ceListen.addEventListener("click", async () => {
