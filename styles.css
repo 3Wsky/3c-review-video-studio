@@ -259,6 +259,14 @@ textarea:focus {
   padding-bottom: 4px;
 }
 
+.asset-card {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .asset-thumb {
   flex: 0 0 64px;
   width: 64px;
@@ -277,6 +285,65 @@ textarea:focus {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 抠图后用棋盘格底显示透明区域，主体用 contain 不裁切 */
+.asset-thumb.is-cutout {
+  background-color: rgba(255, 255, 255, 0.06);
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.12) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.12) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.12) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.12) 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+
+.asset-thumb.is-cutout img {
+  object-fit: contain;
+}
+
+.asset-cut-btn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.asset-cut-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.asset-cut-btn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.asset-cut-btn.done {
+  border-color: rgba(186, 130, 255, 0.5);
+  color: var(--accent);
+}
+
+.product-visual.is-cutout {
+  background: transparent;
+}
+
+.product-visual.is-cutout img {
+  object-fit: contain;
+}
+
+.asset-tip {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .textarea-label {
