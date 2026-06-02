@@ -74,6 +74,7 @@ const els = {
   jsonOutput: document.querySelector("#jsonOutput"),
   apiStatus: document.querySelector("#apiStatus"),
   apiBase: document.querySelector("#apiBase"),
+  ttsVoice: document.querySelector("#ttsVoice"),
   sceneCount: document.querySelector("#sceneCount"),
   durationCount: document.querySelector("#durationCount"),
   sourceCount: document.querySelector("#sourceCount"),
@@ -288,6 +289,41 @@ function getApiBase() {
   const params = new URLSearchParams(location.search);
   if (!base && params.get("api")) base = params.get("api");
   return base.trim().replace(/\/$/, "");
+}
+
+const ttsCache = new Map();
+let ttsAudio = null;
+
+function ttsKey(text, voice) {
+  return `${voice}::${text}`;
+}
+
+async function synthesizeVoiceover(text, voice) {
+  const clean = String(text || "").trim();
+  if (!clean) throw new Error("这一镜还没有口播文案");
+  const key = ttsKey(clean, voice);
+  if (ttsCache.has(key)) return ttsCache.get(key);
+
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    throw new Error("试听需要部署后端（本地 file:// 无法调用 TTS）");
+  }
+  const response = await fetch(`${apiBase}/api/tts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text: clean, voice, format: "mp3" })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.audio) {
+    throw new Error(data.error || "TTS 合成失败");
+  }
+  const src = `data:audio/${data.format || "mp3"};base64,${data.audio}`;
+  ttsCache.set(key, src);
+  return src;
+}
+
+function getSelectedVoice() {
+  return (els.ttsVoice && els.ttsVoice.value) || "mimo_default";
 }
 
 function normalizeTimelineData(data) {
@@ -710,6 +746,9 @@ function renderClipEditor(data) {
       <textarea id="ceVoiceover" rows="5">${escapeHtml(scene.voiceover)}</textarea>
     </label>
     <div class="ce-actions">
+      <button class="icon-button" id="ceListen" type="button" title="用 MiMo-TTS 朗读这一镜口播">
+        <i data-lucide="volume-2"></i><span>试听配音</span>
+      </button>
       <button class="icon-button danger" id="ceDelete" type="button">
         <i data-lucide="trash-2"></i><span>删除此镜头</span>
       </button>
@@ -728,6 +767,7 @@ function renderClipEditor(data) {
   const ceVoiceover = els.clipEditor.querySelector("#ceVoiceover");
   const ceDuration = els.clipEditor.querySelector("#ceDuration");
   const ceDelete = els.clipEditor.querySelector("#ceDelete");
+  const ceListen = els.clipEditor.querySelector("#ceListen");
 
   ceTitle.addEventListener("input", (event) => {
     scene.title = event.target.value;
@@ -756,6 +796,33 @@ function renderClipEditor(data) {
     renderAll(false);
   });
   ceDelete.addEventListener("click", () => deleteScene(initialState.currentScene));
+
+  if (ceListen) {
+    ceListen.addEventListener("click", async () => {
+      const label = ceListen.querySelector("span");
+      const original = label ? label.textContent : "";
+      if (ceListen.classList.contains("is-loading")) return;
+      ceListen.classList.add("is-loading");
+      if (label) label.textContent = "合成中…";
+      try {
+        const src = await synthesizeVoiceover(ceVoiceover.value, getSelectedVoice());
+        if (ttsAudio) {
+          ttsAudio.pause();
+        }
+        ttsAudio = new Audio(src);
+        if (label) label.textContent = "播放中…";
+        ttsAudio.addEventListener("ended", () => {
+          if (label) label.textContent = original;
+        });
+        await ttsAudio.play();
+      } catch (error) {
+        setCueHint(`试听失败：${error.message}`);
+        if (label) label.textContent = original;
+      } finally {
+        ceListen.classList.remove("is-loading");
+      }
+    });
+  }
 
   if (window.lucide) window.lucide.createIcons();
 }
@@ -934,6 +1001,7 @@ function saveDraft() {
       categoryTouched: initialState.categoryTouched,
       targetDuration: els.targetDuration.value,
       platform: els.platform.value,
+      ttsVoice: els.ttsVoice ? els.ttsVoice.value : "",
       layout: initialState.layout,
       facts: els.factsInput.value,
       reviews: els.reviewInput.value,
@@ -963,6 +1031,7 @@ function loadDraft() {
   initialState.categoryTouched = Boolean(draft.categoryTouched);
   if (draft.targetDuration) els.targetDuration.value = draft.targetDuration;
   if (draft.platform) els.platform.value = draft.platform;
+  if (draft.ttsVoice && els.ttsVoice) els.ttsVoice.value = draft.ttsVoice;
   if (draft.layout) initialState.layout = draft.layout;
   els.factsInput.value = draft.facts || "";
   els.reviewInput.value = draft.reviews || "";
@@ -1024,7 +1093,7 @@ function bindEvents() {
   });
 
   // 表单字段改动时持久化草稿（生成后才会真正写入）
-  [els.productName, els.targetDuration, els.platform, els.factsInput, els.reviewInput].forEach((field) => {
+  [els.productName, els.targetDuration, els.platform, els.ttsVoice, els.factsInput, els.reviewInput].forEach((field) => {
     if (field) field.addEventListener("change", saveDraft);
   });
 

@@ -57,6 +57,19 @@ class GenerateInput(BaseModel):
     assets: list[AssetIn] = []
 
 
+class TtsInput(BaseModel):
+    text: str | None = None
+    voice: str | None = None
+    style: str | None = None
+    format: str | None = "mp3"
+
+
+DEFAULT_TTS_MODEL = "mimo-v2.5-tts"
+DEFAULT_TTS_VOICE = "mimo_default"
+TTS_ALLOWED_FORMATS = {"mp3", "wav", "opus", "flac"}
+MAX_TTS_TEXT = 1200
+
+
 def clamp_text(value, max_length):
     return str(value or "")[:max_length]
 
@@ -421,3 +434,77 @@ async def generate_timeline(data: GenerateInput):
         return normalize_timeline(parsed, data)
     except (KeyError, IndexError, ValueError) as error:
         return JSONResponse({"error": f"Timeline 生成失败: {error}"}, status_code=500)
+
+
+@app.post("/api/tts")
+async def tts(data: TtsInput):
+    api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = (
+        os.environ.get("LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or DEFAULT_BASE_URL
+    ).rstrip("/")
+    model = os.environ.get("OPENAI_TTS_MODEL") or DEFAULT_TTS_MODEL
+
+    if not api_key:
+        return JSONResponse(
+            {"error": "LLM_API_KEY (或 OPENAI_API_KEY) 未配置"}, status_code=501
+        )
+
+    text = (data.text or "").strip()[:MAX_TTS_TEXT]
+    if not text:
+        return JSONResponse({"error": "缺少要合成的口播文案 (text)"}, status_code=400)
+
+    voice = (data.voice or os.environ.get("OPENAI_TTS_VOICE") or DEFAULT_TTS_VOICE).strip()
+    style = (data.style or "").strip()
+    fmt = (data.format or "mp3").lower()
+    if fmt not in TTS_ALLOWED_FORMATS:
+        fmt = "mp3"
+
+    # MiMo-TTS rule: text to synthesize goes in an `assistant` message.
+    # Optional `user` message carries a natural-language style instruction.
+    messages = []
+    if style:
+        messages.append({"role": "user", "content": style})
+    messages.append({"role": "assistant", "content": text})
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                f"{base_url}/chat/completions",
+                headers={
+                    "authorization": f"Bearer {api_key}",
+                    "api-key": api_key,
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "audio": {"format": fmt, "voice": voice},
+                },
+            )
+    except httpx.HTTPError as error:
+        return JSONResponse({"error": f"无法连接 TTS 服务: {error}"}, status_code=502)
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return JSONResponse(
+            {"error": "TTS 返回非 JSON", "providerStatus": response.status_code},
+            status_code=502,
+        )
+
+    if response.status_code >= 400:
+        message = (payload.get("error") or {})
+        message = message.get("message") if isinstance(message, dict) else None
+        return JSONResponse(
+            {"error": message or "TTS provider request failed", "providerStatus": response.status_code},
+            status_code=502,
+        )
+
+    try:
+        audio_data = payload["choices"][0]["message"]["audio"]["data"]
+    except (KeyError, IndexError, TypeError):
+        audio_data = None
+    if not audio_data:
+        return JSONResponse({"error": "TTS 返回为空，未拿到音频数据"}, status_code=502)
+
+    return {"audio": audio_data, "format": fmt, "voice": voice}
