@@ -71,9 +71,32 @@
                 <option value="茉莉">茉莉 · 中文女</option>
                 <option value="苏打">苏打 · 中文男</option>
                 <option value="白桦">白桦 · 中文男</option>
+                <option value="clone" id="cloneVoiceOption" disabled>我的克隆音色（先在下方上传）</option>
               </select>
             </label>
           </div>
+
+          <details class="voice-clone" id="voiceCloneBox">
+            <summary>
+              <i data-lucide="mic"></i>
+              克隆我的音色（上传 5–10s 录音，用自己的声音配音）
+            </summary>
+            <div class="voice-clone-body">
+              <label class="upload-zone compact" for="voiceSampleInput">
+                <input id="voiceSampleInput" type="file" accept="audio/*" />
+                <i data-lucide="upload-cloud"></i>
+                <span id="voiceSampleName">选择一段 5–10 秒、安静清晰的录音（wav/mp3/m4a）</span>
+              </label>
+              <label class="textarea-label">
+                <span>这段录音说的内容（逐字，必填）</span>
+                <input id="voicePromptText" type="text" placeholder="例如：大家好，今天给大家测评一款新手机。" />
+              </label>
+              <button class="icon-button" id="enrollVoiceBtn" type="button">
+                <i data-lucide="wand-sparkles"></i><span>克隆我的音色</span>
+              </button>
+              <p class="asset-tip" id="voiceCloneTip">需先部署 CosyVoice 服务并配置 VOICE_CLONE_URL（见 voice-clone/README.md）。克隆后在上方音色选「我的克隆音色」即可。</p>
+            </div>
+          </details>
 
           <div class="segmented" role="group" aria-label="真人出镜布局">
             <button class="segment active" data-layout="center" type="button">真人居中</button>

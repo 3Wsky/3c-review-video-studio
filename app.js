@@ -4,7 +4,9 @@ const initialState = {
   assets: [],
   timeline: [],
   generated: false,
-  categoryTouched: false
+  categoryTouched: false,
+  cloneSpkId: "",
+  clonePromptText: ""
 };
 
 // 按产品名关键词推断品类（更具体的规则排在前面，避免 matebook/matepad 误判为手机）
@@ -81,6 +83,12 @@ const els = {
   apiStatus: document.querySelector("#apiStatus"),
   apiBase: document.querySelector("#apiBase"),
   ttsVoice: document.querySelector("#ttsVoice"),
+  cloneVoiceOption: document.querySelector("#cloneVoiceOption"),
+  voiceSampleInput: document.querySelector("#voiceSampleInput"),
+  voiceSampleName: document.querySelector("#voiceSampleName"),
+  voicePromptText: document.querySelector("#voicePromptText"),
+  enrollVoiceBtn: document.querySelector("#enrollVoiceBtn"),
+  voiceCloneTip: document.querySelector("#voiceCloneTip"),
   sceneCount: document.querySelector("#sceneCount"),
   durationCount: document.querySelector("#durationCount"),
   sourceCount: document.querySelector("#sourceCount"),
@@ -307,29 +315,136 @@ function ttsKey(text, voice) {
 async function synthesizeVoiceover(text, voice) {
   const clean = String(text || "").trim();
   if (!clean) throw new Error("这一镜还没有口播文案");
-  const key = ttsKey(clean, voice);
+
+  const isClone = voice === "clone";
+  const spkId = initialState.cloneSpkId || "";
+  if (isClone && !spkId) {
+    throw new Error("还没克隆你的音色，请先在「高级设置 → 克隆我的音色」上传录音");
+  }
+  const key = isClone ? ttsKey(clean, `clone:${spkId}`) : ttsKey(clean, voice);
   if (ttsCache.has(key)) return ttsCache.get(key);
 
   const apiBase = getApiBase();
   if (!apiBase && location.protocol === "file:") {
     throw new Error("试听需要部署后端（本地 file:// 无法调用 TTS）");
   }
+  const body = isClone
+    ? { text: clean, voice: "clone", cloneSpkId: spkId, format: "wav" }
+    : { text: clean, voice, format: "mp3" };
   const response = await fetch(`${apiBase}/api/tts`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ text: clean, voice, format: "mp3" })
+    body: JSON.stringify(body)
   });
   const data = await response.json();
   if (!response.ok || !data.audio) {
     throw new Error(data.error || "TTS 合成失败");
   }
-  const src = `data:audio/${data.format || "mp3"};base64,${data.audio}`;
+  const src = `data:audio/${data.format || (isClone ? "wav" : "mp3")};base64,${data.audio}`;
   ttsCache.set(key, src);
   return src;
 }
 
 function getSelectedVoice() {
   return (els.ttsVoice && els.ttsVoice.value) || "mimo_default";
+}
+
+// 上传一段录音 + 文字，克隆音色（转发到自部署 CosyVoice 服务）
+async function enrollVoice() {
+  const file = els.voiceSampleInput && els.voiceSampleInput.files && els.voiceSampleInput.files[0];
+  const promptText = (els.voicePromptText && els.voicePromptText.value.trim()) || "";
+  if (!file) {
+    setVoiceCloneTip("请先选择一段 5–10 秒的录音文件", true);
+    return;
+  }
+  if (!promptText) {
+    setVoiceCloneTip("请填写这段录音逐字说的内容（必填）", true);
+    if (els.voicePromptText) els.voicePromptText.focus();
+    return;
+  }
+
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setVoiceCloneTip("克隆需要部署后端（本地 file:// 无法调用）", true);
+    return;
+  }
+
+  const btn = els.enrollVoiceBtn;
+  const label = btn && btn.querySelector("span");
+  const original = label ? label.textContent : "";
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = "克隆中…";
+  setVoiceCloneTip("正在上传录音并克隆音色，请稍候（首次会等模型加载）…");
+
+  try {
+    const form = new FormData();
+    form.append("audio", file, file.name || "voice.wav");
+    form.append("prompt_text", promptText);
+    const response = await fetch(`${apiBase}/api/voice-enroll`, { method: "POST", body: form });
+    const data = await response.json();
+    if (!response.ok || !data.spkId) {
+      throw new Error(data.error || "音色克隆失败");
+    }
+    initialState.cloneSpkId = data.spkId;
+    initialState.clonePromptText = data.promptText || promptText;
+    enableCloneVoiceOption(true);
+    if (els.ttsVoice) els.ttsVoice.value = "clone";
+    ttsCache.clear();
+    persistCloneState();
+    saveDraft();
+    setVoiceCloneTip(`克隆成功 ✓ 音色已选为「我的克隆音色」，每镜「试听配音」即用你的声音（spkId: ${data.spkId}）`);
+  } catch (error) {
+    setVoiceCloneTip(`克隆失败：${error.message}`, true);
+  } finally {
+    if (btn) btn.disabled = false;
+    if (label) label.textContent = original;
+  }
+}
+
+function setVoiceCloneTip(text, isError = false) {
+  if (!els.voiceCloneTip) return;
+  els.voiceCloneTip.textContent = text;
+  els.voiceCloneTip.classList.toggle("is-error", Boolean(isError));
+}
+
+function enableCloneVoiceOption(enabled) {
+  if (!els.cloneVoiceOption) return;
+  els.cloneVoiceOption.disabled = !enabled;
+  els.cloneVoiceOption.textContent = enabled ? "我的克隆音色" : "我的克隆音色（先在下方上传）";
+}
+
+// 克隆音色独立持久化（与草稿解耦：克隆可发生在生成分镜之前）
+const CLONE_SPK_KEY = "cloneVoice_v1";
+
+function persistCloneState() {
+  try {
+    if (initialState.cloneSpkId) {
+      localStorage.setItem(
+        CLONE_SPK_KEY,
+        JSON.stringify({ spkId: initialState.cloneSpkId, promptText: initialState.clonePromptText || "" })
+      );
+    } else {
+      localStorage.removeItem(CLONE_SPK_KEY);
+    }
+  } catch (error) {
+    /* ignore storage errors */
+  }
+}
+
+function restoreCloneState() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(CLONE_SPK_KEY) || "null");
+  } catch (error) {
+    saved = null;
+  }
+  if (saved && saved.spkId) {
+    initialState.cloneSpkId = saved.spkId;
+    initialState.clonePromptText = saved.promptText || "";
+    enableCloneVoiceOption(true);
+    if (els.voicePromptText && saved.promptText) els.voicePromptText.value = saved.promptText;
+    setVoiceCloneTip(`已克隆音色（spkId: ${saved.spkId}）。在上方音色选「我的克隆音色」即可用你的声音试听。`);
+  }
 }
 
 async function rewriteCurrentScene(scene) {
@@ -1506,7 +1621,9 @@ function loadDraft() {
   initialState.categoryTouched = Boolean(draft.categoryTouched);
   if (draft.targetDuration) els.targetDuration.value = draft.targetDuration;
   if (draft.platform) els.platform.value = draft.platform;
-  if (draft.ttsVoice && els.ttsVoice) els.ttsVoice.value = draft.ttsVoice;
+  if (draft.ttsVoice && els.ttsVoice && (draft.ttsVoice !== "clone" || initialState.cloneSpkId)) {
+    els.ttsVoice.value = draft.ttsVoice;
+  }
   if (draft.layout) initialState.layout = draft.layout;
   els.factsInput.value = draft.facts || "";
   els.reviewInput.value = draft.reviews || "";
@@ -1554,6 +1671,18 @@ function bindEvents() {
   els.advToggle.addEventListener("click", toggleAdvanced);
   if (els.resetBtn) els.resetBtn.addEventListener("click", resetAll);
   if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", () => searchZhihu());
+
+  if (els.enrollVoiceBtn) els.enrollVoiceBtn.addEventListener("click", enrollVoice);
+  if (els.voiceSampleInput) {
+    els.voiceSampleInput.addEventListener("change", (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (els.voiceSampleName) {
+        els.voiceSampleName.textContent = file
+          ? file.name
+          : "选择一段 5–10 秒、安静清晰的录音（wav/mp3/m4a）";
+      }
+    });
+  }
 
   els.productName.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -1663,6 +1792,7 @@ function bindEvents() {
 
 bindEvents();
 renderAssets();
+restoreCloneState();
 const restoredDraft = loadDraft();
 renderAll(!restoredDraft);
 if (restoredDraft) {

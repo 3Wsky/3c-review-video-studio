@@ -1,0 +1,5 @@
+# 本服务自身的依赖（在 CosyVoice 的 requirements 之外再补这几个）。
+# CosyVoice 本体的依赖请用 deploy.sh 里 `pip install -r CosyVoice/requirements.txt` 安装。
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
