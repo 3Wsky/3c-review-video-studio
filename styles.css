@@ -1151,6 +1151,60 @@ textarea:focus {
   color: var(--muted);
 }
 
+/* 一键生成 loading 态 */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cue-go.is-loading {
+  opacity: 0.9;
+  cursor: progress;
+}
+
+.cue-go.is-loading svg {
+  animation: spin 0.9s linear infinite;
+}
+
+/* 生成中的轨道骨架占位 */
+@keyframes shimmer {
+  0% {
+    background-position: -240px 0;
+  }
+  100% {
+    background-position: 240px 0;
+  }
+}
+
+.clip-skeleton {
+  cursor: progress;
+  pointer-events: none;
+  gap: 8px;
+}
+
+.clip-skeleton .sk-line {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(177, 107, 255, 0.22) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 480px 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+.clip-skeleton .sk-sm {
+  width: 42%;
+}
+
+.clip-skeleton .sk-md {
+  width: 72%;
+  height: 13px;
+}
+
 /* 预览 + 编辑器 */
 .editor-row {
   display: grid;

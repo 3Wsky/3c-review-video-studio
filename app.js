@@ -3,8 +3,29 @@ const initialState = {
   currentScene: 0,
   assets: [],
   timeline: [],
-  generated: false
+  generated: false,
+  categoryTouched: false
 };
+
+// 按产品名关键词推断品类（更具体的规则排在前面，避免 matebook/matepad 误判为手机）
+const CATEGORY_RULES = [
+  { cat: "笔记本", kw: ["笔记本", "笔电", "macbook", "matebook", "redmibook", "magicbook", "thinkpad", "thinkbook", "拯救者", "游戏本", "轻薄本", "灵越", "幻", "暗影精灵", "星"] },
+  { cat: "平板", kw: ["平板", "ipad", "matepad", "小米平板", "tablet"] },
+  { cat: "显卡", kw: ["显卡", "rtx", "gtx", "geforce", "radeon", "4090", "4080", "4070", "4060", "5090", "5080", "5070", "9070", "7900", "7800"] },
+  { cat: "显示器", kw: ["显示器", "显示屏", "monitor", "带鱼屏", "电竞屏"] },
+  { cat: "智能穿戴", kw: ["手表", "watch", "手环", "穿戴", "smart band"] },
+  { cat: "耳机", kw: ["耳机", "airpods", "earbuds", "freebuds", "freebud", "声阔", "soundcore", "漫步者", "edifier", "森海", "sennheiser", "降噪豆", "开放式", "入耳", "buds"] },
+  { cat: "手机", kw: ["手机", "nova", "mate", "iphone", "苹果", "小米", "redmi", "红米", "oppo", "vivo", "荣耀", "honor", "三星", "galaxy", "pixel", "realme", "真我", "一加", "oneplus", "魅族", "reno", "find x"] }
+];
+
+function inferCategory(name) {
+  const lower = (name || "").toLowerCase();
+  if (!lower) return "";
+  for (const rule of CATEGORY_RULES) {
+    if (rule.kw.some((k) => lower.includes(k.toLowerCase()))) return rule.cat;
+  }
+  return "";
+}
 
 const modules = [
   {
@@ -40,6 +61,7 @@ const els = {
   oneClickBtn: document.querySelector("#oneClickBtn"),
   regenerateBtn: document.querySelector("#regenerateBtn"),
   addSceneBtn: document.querySelector("#addSceneBtn"),
+  resetBtn: document.querySelector("#resetBtn"),
   advToggle: document.querySelector("#advToggle"),
   advPanel: document.querySelector("#advPanel"),
   cueHint: document.querySelector("#cueHint"),
@@ -372,30 +394,52 @@ async function oneClickGenerate() {
     els.productName.focus();
     return;
   }
-  setBusy(true);
-  if (!els.zhihuQuery.value.trim()) {
-    setCueHint("正在搜索知乎，抓取真实素材…");
-    try {
-      await searchZhihu({ silent: true });
-    } catch (error) {
-      console.warn(error);
-    }
-  } else {
-    setCueHint("正在搜索知乎，抓取真实素材…");
-    try {
-      await searchZhihu({ silent: true });
-    } catch (error) {
-      console.warn(error);
-    }
+
+  // 用户没手动改过品类时，按产品名自动推断（避免默认「耳机」跑偏）
+  if (!initialState.categoryTouched) {
+    const inferred = inferCategory(product);
+    if (inferred) els.category.value = inferred;
   }
-  setCueHint("正在用 MiMo 生成分镜，请稍候…");
-  await generateTimelineFromApi();
-  setCueHint(
-    initialState.generated
-      ? "生成完成 ✓ 拖动卡片调整顺序，点击卡片在下方编辑文案与时长。"
-      : "已生成示例分镜。"
-  );
-  setBusy(false);
+
+  setBusy(true);
+  setGenerating(true);
+  try {
+    setCueHint(`已识别品类「${els.category.value}」，正在搜索知乎抓取真实素材…`);
+    try {
+      await searchZhihu({ silent: true });
+    } catch (error) {
+      console.warn(error);
+    }
+    setCueHint("正在用 MiMo 生成分镜，请稍候…");
+    await generateTimelineFromApi();
+    setCueHint(
+      initialState.generated
+        ? "生成完成 ✓ 拖动卡片调整顺序，点击卡片在下方编辑文案与时长。"
+        : "已生成示例分镜。"
+    );
+  } finally {
+    setGenerating(false);
+    setBusy(false);
+  }
+}
+
+function renderTrackSkeleton(count = 6) {
+  if (!els.track) return;
+  els.track.innerHTML = "";
+  for (let i = 0; i < count; i += 1) {
+    const sk = document.createElement("div");
+    sk.className = "clip clip-skeleton";
+    sk.style.flexGrow = String(3 + (i % 3));
+    sk.innerHTML =
+      '<div class="sk-line sk-sm"></div><div class="sk-line sk-md"></div><div class="sk-line"></div><div class="sk-line"></div>';
+    els.track.appendChild(sk);
+  }
+}
+
+function setGenerating(on) {
+  if (els.oneClickBtn) els.oneClickBtn.classList.toggle("is-loading", on);
+  document.body.classList.toggle("is-generating", on);
+  if (on) renderTrackSkeleton();
 }
 
 function escapeHtml(value) {
@@ -794,6 +838,7 @@ function renderAll(rebuild = true) {
   renderMetrics(initialState.timeline);
   renderJson(initialState.timeline);
   if (window.lucide) window.lucide.createIcons();
+  saveDraft();
 }
 
 function setLayout(layout) {
@@ -869,11 +914,91 @@ function downloadBrief() {
   downloadFile("3c-video-brief.md", lines.join("\n"), "text/markdown");
 }
 
+const DRAFT_KEY = "directorDraft_v1";
+
+function saveDraft() {
+  if (!initialState.generated) return;
+  try {
+    const draft = {
+      productName: els.productName.value,
+      category: els.category.value,
+      categoryTouched: initialState.categoryTouched,
+      targetDuration: els.targetDuration.value,
+      platform: els.platform.value,
+      layout: initialState.layout,
+      facts: els.factsInput.value,
+      reviews: els.reviewInput.value,
+      zhihuQuery: els.zhihuQuery ? els.zhihuQuery.value : "",
+      timeline: initialState.timeline,
+      currentScene: initialState.currentScene,
+      apiStatus: els.apiStatus ? els.apiStatus.textContent : ""
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch (error) {
+    /* ignore storage errors */
+  }
+}
+
+function loadDraft() {
+  let draft = null;
+  try {
+    draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+  } catch (error) {
+    draft = null;
+  }
+  if (!draft || !draft.timeline || !Array.isArray(draft.timeline.timeline) || !draft.timeline.timeline.length) {
+    return false;
+  }
+  els.productName.value = draft.productName || "";
+  if (draft.category) els.category.value = draft.category;
+  initialState.categoryTouched = Boolean(draft.categoryTouched);
+  if (draft.targetDuration) els.targetDuration.value = draft.targetDuration;
+  if (draft.platform) els.platform.value = draft.platform;
+  if (draft.layout) initialState.layout = draft.layout;
+  els.factsInput.value = draft.facts || "";
+  els.reviewInput.value = draft.reviews || "";
+  if (els.zhihuQuery) els.zhihuQuery.value = draft.zhihuQuery || "";
+  initialState.timeline = draft.timeline;
+  initialState.currentScene = draft.currentScene || 0;
+  initialState.generated = true;
+  document.querySelectorAll(".segment").forEach((seg) => {
+    seg.classList.toggle("active", seg.dataset.layout === initialState.layout);
+  });
+  if (els.apiStatus && draft.apiStatus) setApiStatus(draft.apiStatus);
+  return true;
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch (error) {
+    /* ignore storage errors */
+  }
+}
+
+function resetAll() {
+  clearDraft();
+  initialState.timeline = [];
+  initialState.currentScene = 0;
+  initialState.generated = false;
+  initialState.categoryTouched = false;
+  els.productName.value = "";
+  els.category.selectedIndex = 0;
+  els.factsInput.value = "";
+  els.reviewInput.value = "";
+  if (els.zhihuQuery) els.zhihuQuery.value = "";
+  if (els.zhihuResults) els.zhihuResults.innerHTML = "";
+  setApiStatus("本地预览");
+  setCueHint("已重置。输入产品名点「一键生成」开始。");
+  renderAll(true);
+}
+
 function bindEvents() {
   els.oneClickBtn.addEventListener("click", oneClickGenerate);
   els.regenerateBtn.addEventListener("click", generateTimelineFromApi);
   els.addSceneBtn.addEventListener("click", addScene);
   els.advToggle.addEventListener("click", toggleAdvanced);
+  if (els.resetBtn) els.resetBtn.addEventListener("click", resetAll);
   if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", () => searchZhihu());
 
   els.productName.addEventListener("keydown", (event) => {
@@ -881,6 +1006,17 @@ function bindEvents() {
       event.preventDefault();
       oneClickGenerate();
     }
+  });
+
+  // 用户手动改过品类后，不再自动推断
+  els.category.addEventListener("change", () => {
+    initialState.categoryTouched = true;
+    saveDraft();
+  });
+
+  // 表单字段改动时持久化草稿（生成后才会真正写入）
+  [els.productName, els.targetDuration, els.platform, els.factsInput, els.reviewInput].forEach((field) => {
+    if (field) field.addEventListener("change", saveDraft);
   });
 
   if (els.assetInput) {
@@ -952,4 +1088,8 @@ function bindEvents() {
 
 bindEvents();
 renderAssets();
-renderAll(true);
+const restoredDraft = loadDraft();
+renderAll(!restoredDraft);
+if (restoredDraft) {
+  setCueHint("已恢复上次草稿 ✓ 继续编辑，或点「重置」重新开始。");
+}
