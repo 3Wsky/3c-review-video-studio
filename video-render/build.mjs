@@ -1,0 +1,290 @@
+#!/usr/bin/env node
+// Timeline JSON → HyperFrames 合成 HTML 生成器
+//
+// 把导演台生成的 Timeline JSON（{ project, insights, timeline[] }）转成一份可被
+// `hyperframes lint/validate/render` 处理的 9:16 合成 HTML：每个分镜是一段
+// `.scene.clip`，按 data-start 顺序平铺，配 GSAP 入场动画（产品图 Ken Burns、
+// 标题/字幕淡入）。结构借鉴 Pixelle-Video 分层模板：背景媒体层 + 渐变遮罩 + 内容层。
+//
+// 用法：
+//   node build.mjs --in timeline.json --out index.html [--assets assets]
+//
+// 设计原则：
+//   - 数据驱动 + 缺字段安全降级（无产品图→纯渐变背景；无标题→只渲字幕）。
+//   - 确定性：不使用 Date.now()/Math.random()，相同输入产出相同 HTML。
+//   - 也导出 buildHtml(timeline, opts) 供渲染 worker 程序化调用。
+
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { basename, extname, join, resolve } from "node:path";
+
+const FPS = 30;
+const WIDTH = 1080;
+const HEIGHT = 1920;
+
+// ---------- 小工具 ----------
+
+function escapeHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// 数值兜底：取正数，否则用默认值
+function num(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+// 高亮字幕里的「数字 + 单位」（如 12 小时 / 5000mAh / 1.2kg），纯正则、确定性，
+// 让字幕带一点「数据感」。先转义再插入受控的高亮 span。
+function highlightNumbers(text) {
+  const safe = escapeHtml(text);
+  return safe.replace(
+    /(\d+(?:\.\d+)?\s*(?:[%‰]|小时|分钟|天|年|倍|档|档位|元|块|克|千克|公斤|kg|g|mm|cm|英寸|寸|mAh|W|GB|TB|MP|Hz|fps|nit|尼特)?)/g,
+    '<span class="hl">$1</span>',
+  );
+}
+
+// 把分镜的 asset 名解析到 assets/ 目录里真实存在的图片；找不到返回 null（降级为纯背景）。
+function resolveAsset(assetName, assetsDir) {
+  if (!assetName || !assetsDir || !existsSync(assetsDir)) return null;
+  const exts = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
+  const files = readdirSync(assetsDir).filter((f) => exts.has(extname(f).toLowerCase()));
+  if (files.length === 0) return null;
+  const base = basename(String(assetName));
+  // 1) 精确匹配文件名
+  const exact = files.find((f) => f === base || f.toLowerCase() === base.toLowerCase());
+  if (exact) return `assets/${exact}`;
+  // 2) 占位名（uploaded_product_asset 之类）→ 用目录里第一张图兜底
+  return `assets/${files[0]}`;
+}
+
+// ---------- 核心：构造每镜数据 ----------
+
+function normalizeScenes(timeline, assetsDir) {
+  const scenes = Array.isArray(timeline?.timeline) ? timeline.timeline : [];
+  let cursor = 0;
+  return scenes.map((scene, i) => {
+    const duration = num(
+      scene?.duration ?? (num(scene?.end, 0) - num(scene?.start, 0)),
+      4,
+    );
+    const start = cursor;
+    cursor += duration;
+    const visual = scene?.visual || {};
+    return {
+      id: `scene-${i + 1}`,
+      index: i + 1,
+      start: Math.round(start * 1000) / 1000,
+      duration: Math.round(duration * 1000) / 1000,
+      badge: String(scene?.title || "").trim(),
+      headline: String(visual.headline || "").trim(),
+      detail: String(visual.detail || "").trim(),
+      subtitle: String(scene?.subtitle || scene?.voiceover || "").trim(),
+      asset: resolveAsset(visual.asset, assetsDir),
+    };
+  });
+}
+
+// ---------- HTML 片段 ----------
+
+function sceneMarkup(s) {
+  const bg = s.asset
+    ? `<div class="bg-layer"><img id="${s.id}-img" src="${escapeHtml(s.asset)}" alt="" /></div>`
+    : `<div class="bg-layer bg-fallback"></div>`;
+  const badge = s.badge ? `<div id="${s.id}-badge" class="badge">${escapeHtml(s.badge)}</div>` : "";
+  const headline = s.headline
+    ? `<div id="${s.id}-title" class="title">${escapeHtml(s.headline)}</div>`
+    : "";
+  const detail = s.detail ? `<div id="${s.id}-detail" class="detail">${escapeHtml(s.detail)}</div>` : "";
+  const subtitle = s.subtitle
+    ? `<div id="${s.id}-sub" class="subtitle">${highlightNumbers(s.subtitle)}</div>`
+    : "";
+  return `      <section
+        id="${s.id}"
+        class="scene clip"
+        data-start="${s.start}"
+        data-duration="${s.duration}"
+        data-track-index="0"
+      >
+        ${bg}
+        <div class="gradient-overlay"></div>
+        <div class="content">
+          ${badge}
+          ${headline}
+          ${detail}
+          ${subtitle}
+        </div>
+      </section>`;
+}
+
+function sceneTimeline(s) {
+  const lines = [];
+  const t = s.start;
+  if (s.asset) {
+    // Ken Burns：整镜缓慢推近
+    lines.push(
+      `      tl.fromTo("#${s.id}-img", { scale: 1.0 }, { scale: 1.08, duration: ${s.duration}, ease: "none" }, ${t});`,
+    );
+  }
+  if (s.badge) {
+    lines.push(
+      `      tl.from("#${s.id}-badge", { autoAlpha: 0, y: -30, duration: 0.5, ease: "power3.out" }, ${round(t + 0.15)});`,
+    );
+  }
+  if (s.headline) {
+    lines.push(
+      `      tl.from("#${s.id}-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, ${round(t + 0.25)});`,
+    );
+  }
+  if (s.detail) {
+    lines.push(
+      `      tl.from("#${s.id}-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, ${round(t + 0.45)});`,
+    );
+  }
+  if (s.subtitle) {
+    lines.push(
+      `      tl.from("#${s.id}-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, ${round(t + 0.55)});`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function round(n) {
+  return Math.round(n * 1000) / 1000;
+}
+
+// ---------- 组装整页 ----------
+
+export function buildHtml(timeline, opts = {}) {
+  const assetsDir = opts.assetsDir || null;
+  const scenes = normalizeScenes(timeline, assetsDir);
+  if (scenes.length === 0) throw new Error("Timeline 为空：timeline[] 没有分镜");
+  const total = round(scenes.reduce((sum, s) => sum + s.duration, 0));
+  const product = escapeHtml(timeline?.project?.product || "产品测评");
+
+  const body = scenes.map(sceneMarkup).join("\n\n");
+  const tweens = scenes.map(sceneTimeline).filter(Boolean).join("\n");
+
+  return `<!doctype html>
+<html lang="zh" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=${WIDTH}, height=${HEIGHT}" />
+    <!--
+      由 build.mjs 从 Timeline JSON 自动生成，请勿手改（改模板请改 build.mjs）。
+      产品：${product}
+      CJK 字体：HyperFrames 渲染走确定性字体，默认不含中文。Linux worker 需装
+      fonts-noto-cjk 或在下方 style 内 @font-face 内嵌 Noto Sans SC，否则中文变方块。
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden;
+        background: #0b0d12;
+        font-family: "PingFang SC", "Source Han Sans", "Microsoft YaHei",
+          "Noto Sans SC", "WenQuanYi Zen Hei", sans-serif;
+      }
+      .scene { position: absolute; inset: 0; }
+      .bg-layer { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+      .bg-layer img { width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 42%; }
+      .bg-fallback {
+        background:
+          radial-gradient(120% 80% at 50% 0%, rgba(91,140,255,0.22), transparent 60%),
+          radial-gradient(120% 80% at 50% 100%, rgba(138,107,255,0.20), transparent 60%),
+          #0b0d12;
+      }
+      .gradient-overlay {
+        position: absolute; inset: 0; z-index: 1;
+        background: linear-gradient(to bottom,
+          rgba(6,8,14,0.86) 0%,
+          rgba(6,8,14,0.50) 18%,
+          rgba(6,8,14,0.12) 40%,
+          rgba(6,8,14,0.12) 50%,
+          rgba(6,8,14,0.88) 100%);
+      }
+      .content { position: absolute; inset: 0; z-index: 2; color: #fff; }
+      .badge {
+        position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+        padding: 14px 34px; border-radius: 999px;
+        font-size: 30px; font-weight: 600; letter-spacing: 2px;
+        color: #d9e1ff; background: rgba(88,110,255,0.18);
+        border: 1px solid rgba(140,160,255,0.45); white-space: nowrap;
+      }
+      .title {
+        position: absolute; top: 196px; left: 80px; right: 80px;
+        font-size: 86px; font-weight: 800; line-height: 1.18; text-align: center;
+        text-shadow: 0 6px 24px rgba(0,0,0,0.6);
+      }
+      .detail {
+        position: absolute; top: 470px; left: 110px; right: 110px;
+        font-size: 44px; font-weight: 500; line-height: 1.4; text-align: center;
+        color: #c6cfe6; text-shadow: 0 3px 14px rgba(0,0,0,0.6);
+      }
+      .subtitle {
+        position: absolute; left: 80px; right: 80px; bottom: 150px;
+        font-size: 56px; font-weight: 600; line-height: 1.5; text-align: center;
+        text-shadow: 0 3px 12px rgba(0,0,0,0.7);
+      }
+      .subtitle .hl { color: #ffd166; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="${total}"
+      data-width="${WIDTH}"
+      data-height="${HEIGHT}"
+      data-fps="${FPS}"
+    >
+${body}
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+${tweens}
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
+`;
+}
+
+// ---------- CLI ----------
+
+function parseArgs(argv) {
+  const args = { in: null, out: "index.html", assets: "assets" };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--in" || a === "-i") args.in = argv[++i];
+    else if (a === "--out" || a === "-o") args.out = argv[++i];
+    else if (a === "--assets") args.assets = argv[++i];
+  }
+  return args;
+}
+
+function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (!args.in) {
+    console.error("用法: node build.mjs --in timeline.json --out index.html [--assets assets]");
+    process.exit(1);
+  }
+  const timeline = JSON.parse(readFileSync(resolve(args.in), "utf8"));
+  const assetsDir = args.assets ? resolve(args.assets) : null;
+  const html = buildHtml(timeline, { assetsDir });
+  writeFileSync(resolve(args.out), html, "utf8");
+  const n = Array.isArray(timeline?.timeline) ? timeline.timeline.length : 0;
+  console.log(`✓ 已生成 ${args.out}（${n} 个分镜）`);
+}
+
+// 仅在作为脚本直接运行时执行（被 import 时不跑）
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}
