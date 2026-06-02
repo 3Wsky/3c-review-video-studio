@@ -1,16 +1,20 @@
 :root {
-  --bg: #f6f7f4;
-  --panel: #ffffff;
-  --ink: #20231f;
-  --muted: #676f66;
-  --line: #dfe4dc;
-  --soft: #eef2eb;
-  --teal: #0f766e;
-  --teal-dark: #0a4f4a;
-  --red: #b42318;
-  --amber: #a16207;
-  --blue: #2454a6;
-  --shadow: 0 10px 30px rgba(27, 31, 26, 0.08);
+  --bg: #08080f;
+  --panel: rgba(22, 22, 33, 0.72);
+  --panel-2: rgba(30, 30, 45, 0.7);
+  --ink: #eef0f6;
+  --muted: #9aa0b4;
+  --line: rgba(255, 255, 255, 0.10);
+  --soft: rgba(255, 255, 255, 0.045);
+  --teal: #b16bff;
+  --teal-dark: #8b3bf0;
+  --accent: #b16bff;
+  --accent-grad: linear-gradient(135deg, #ff4d9d 0%, #b16bff 52%, #6f7bff 100%);
+  --accent-soft: rgba(177, 107, 255, 0.16);
+  --red: #ff6b6b;
+  --amber: #fbbf24;
+  --blue: #7aa2ff;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -21,6 +25,11 @@ body {
   margin: 0;
   min-height: 100vh;
   background: var(--bg);
+  background-image:
+    radial-gradient(900px 600px at 12% -10%, rgba(255, 77, 157, 0.16), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(111, 123, 255, 0.16), transparent 55%),
+    radial-gradient(800px 600px at 50% 110%, rgba(177, 107, 255, 0.14), transparent 60%);
+  background-attachment: fixed;
   color: var(--ink);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -46,11 +55,11 @@ button {
   gap: 20px;
   padding: 14px 24px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.86);
+  background: rgba(10, 10, 18, 0.7);
   position: sticky;
   top: 0;
   z-index: 20;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
 }
 
 .brand {
@@ -65,10 +74,12 @@ button {
   height: 42px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--ink);
-  border-radius: 8px;
+  border: none;
+  border-radius: 11px;
   font-weight: 800;
-  background: #f3c846;
+  color: #fff;
+  background: var(--accent-grad);
+  box-shadow: 0 6px 20px rgba(177, 107, 255, 0.4);
 }
 
 .brand h1 {
@@ -103,8 +114,9 @@ button {
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
 }
 
 .input-panel,
@@ -128,11 +140,11 @@ button {
 
 .status-pill {
   min-height: 24px;
-  padding: 3px 8px;
+  padding: 4px 12px;
   border-radius: 999px;
-  background: #fff4cf;
-  color: #6b4b00;
-  border: 1px solid #ebd88f;
+  background: var(--accent-soft);
+  color: #e9d5ff;
+  border: 1px solid rgba(177, 107, 255, 0.45);
   font-size: 12px;
   font-weight: 700;
 }
@@ -160,10 +172,19 @@ select,
 textarea {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fbfcfa;
+  border-radius: 8px;
+  background: var(--panel-2);
   color: var(--ink);
   outline: none;
+}
+
+select option {
+  background: #14141f;
+  color: var(--ink);
+}
+
+::placeholder {
+  color: rgba(154, 160, 180, 0.7);
 }
 
 input,
@@ -181,8 +202,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.13);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .segmented {
@@ -203,16 +224,16 @@ textarea:focus {
 }
 
 .segment.active {
-  background: var(--teal);
-  border-color: var(--teal);
+  background: var(--accent-grad);
+  border-color: transparent;
   color: #fff;
 }
 
 .upload-zone {
   min-height: 86px;
-  border: 1px dashed #9aa69a;
-  border-radius: 8px;
-  background: #fbfcfa;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: var(--soft);
   display: grid;
   place-items: center;
   gap: 8px;
@@ -227,7 +248,7 @@ textarea:focus {
 .upload-zone svg {
   width: 24px;
   height: 24px;
-  color: var(--teal);
+  color: var(--accent);
 }
 
 .asset-strip {
@@ -267,8 +288,8 @@ textarea:focus {
 .tab {
   min-height: 36px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fff;
+  border-radius: 8px;
+  background: var(--soft);
   color: var(--ink);
   display: inline-flex;
   align-items: center;
@@ -286,8 +307,14 @@ textarea:focus {
 }
 
 .icon-button.primary {
-  background: var(--teal);
-  border-color: var(--teal);
+  background: var(--accent-grad);
+  border-color: transparent;
+  color: #fff;
+}
+
+.icon-button:hover,
+.square-button:hover {
+  border-color: rgba(177, 107, 255, 0.5);
   color: #fff;
 }
 
@@ -524,9 +551,10 @@ textarea:focus {
   width: min(100%, 330px);
   margin: 0 auto;
   padding: 10px;
-  border: 1px solid #c9d1c4;
-  border-radius: 8px;
-  background: #111412;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  background: #0d0d16;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 .video-stage {
@@ -847,11 +875,27 @@ textarea:focus {
 
 /* 起片区 */
 .stage-bar {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 18px;
   box-shadow: var(--shadow);
-  padding: 18px;
+  padding: 22px;
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+
+.stage-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(255, 77, 157, 0.5), rgba(111, 123, 255, 0.4), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 .cue {
@@ -864,17 +908,18 @@ textarea:focus {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 0 18px;
-  height: 54px;
+  height: 56px;
   font-size: 18px;
-  background: #fff;
+  color: var(--ink);
+  background: rgba(12, 12, 20, 0.6);
   outline: none;
 }
 
 .cue-input:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .cue-go {
@@ -882,18 +927,22 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 54px;
-  padding: 0 26px;
+  height: 56px;
+  padding: 0 28px;
   border: none;
-  border-radius: 10px;
-  background: var(--teal);
+  border-radius: 12px;
+  background: var(--accent-grad);
   color: #fff;
   font-size: 17px;
   font-weight: 700;
+  box-shadow: 0 10px 28px rgba(177, 107, 255, 0.4);
+  transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
 }
 
 .cue-go:hover {
-  background: var(--teal-dark);
+  filter: brightness(1.08);
+  box-shadow: 0 14px 34px rgba(177, 107, 255, 0.55);
+  transform: translateY(-1px);
 }
 
 .cue-go:disabled {
@@ -911,19 +960,19 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 54px;
+  height: 56px;
   padding: 0 16px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fff;
+  border-radius: 12px;
+  background: var(--soft);
   color: var(--muted);
   font-weight: 600;
 }
 
 .adv-toggle.active,
 .adv-toggle:hover {
-  border-color: var(--teal);
-  color: var(--teal);
+  border-color: rgba(177, 107, 255, 0.5);
+  color: #e9d5ff;
 }
 
 .adv-toggle svg {
@@ -982,6 +1031,10 @@ textarea:focus {
 
 .metrics strong {
   font-size: 18px;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .metrics span {
@@ -998,8 +1051,8 @@ textarea:focus {
 /* 横向时间线轨道 */
 .track-wrap {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fbfcfa;
+  border-radius: 12px;
+  background: rgba(10, 10, 18, 0.45);
   padding: 12px;
 }
 
@@ -1023,8 +1076,8 @@ textarea:focus {
   flex-basis: 0;
   min-width: 120px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 12px;
+  background: var(--panel-2);
   padding: 10px;
   cursor: grab;
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.05s;
@@ -1034,13 +1087,13 @@ textarea:focus {
 }
 
 .clip:hover {
-  border-color: var(--teal);
+  border-color: rgba(177, 107, 255, 0.5);
 }
 
 .clip.active {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.18);
-  background: #f3faf8;
+  border-color: transparent;
+  box-shadow: 0 0 0 1.5px var(--accent), 0 10px 26px rgba(177, 107, 255, 0.3);
+  background: linear-gradient(160deg, rgba(177, 107, 255, 0.18), rgba(111, 123, 255, 0.08)), var(--panel-2);
 }
 
 .clip.dragging {
@@ -1064,7 +1117,7 @@ textarea:focus {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--teal);
+  background: var(--accent-grad);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -1079,6 +1132,7 @@ textarea:focus {
 .clip-title {
   font-weight: 700;
   font-size: 14px;
+  color: var(--ink);
 }
 
 .clip-vo {
@@ -1118,9 +1172,10 @@ textarea:focus {
 
 .clip-editor {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 14px;
-  background: #fff;
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1154,7 +1209,8 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 11px;
-  background: #fff;
+  background: var(--panel-2);
+  color: var(--ink);
   outline: none;
   resize: vertical;
   width: 100%;
@@ -1162,8 +1218,8 @@ textarea:focus {
 
 .ce-field input:focus,
 .ce-field textarea:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .ce-grid {
@@ -1178,20 +1234,22 @@ textarea:focus {
 }
 
 .icon-button.danger {
-  border-color: #e7c3bf;
+  border-color: rgba(255, 107, 107, 0.4);
   color: var(--red);
 }
 
 .icon-button.danger:hover {
-  background: #fdf1ef;
+  background: rgba(255, 107, 107, 0.12);
+  border-color: rgba(255, 107, 107, 0.6);
+  color: var(--red);
 }
 
 /* 知乎来源折叠 */
 .sources {
   margin-top: 16px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #fbfcfa;
+  border-radius: 12px;
+  background: rgba(10, 10, 18, 0.45);
 }
 
 .sources > summary {
