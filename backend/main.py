@@ -21,7 +21,7 @@ import time
 import httpx
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 DEFAULT_MODEL = "deepseek-chat"
@@ -63,6 +63,14 @@ class TtsInput(BaseModel):
     style: str | None = None
     format: str | None = "mp3"
     cloneSpkId: str | None = None
+
+
+class RenderInput(BaseModel):
+    timeline: dict | None = None
+    voice: str | None = "mimo_default"
+    cloneSpkId: str | None = None
+    gpu: bool | None = True
+    assets: dict | None = None
 
 
 class RewriteSceneInput(BaseModel):
@@ -613,6 +621,61 @@ async def voice_enroll(
             status_code=502,
         )
     return {"spkId": payload["spkId"], "promptText": payload.get("promptText") or prompt_text}
+
+
+def _render_url() -> str:
+    return (os.environ.get("RENDER_URL") or "").strip().rstrip("/")
+
+
+@app.post("/api/render")
+async def render(data: RenderInput):
+    """把渲染请求转发到自部署的渲染 worker（RENDER_URL）。worker 一站式出片，返回 MP4。"""
+    render_url = _render_url()
+    if not render_url:
+        return JSONResponse(
+            {"error": "渲染服务未配置（请设置环境变量 RENDER_URL 指向你的渲染 worker）"},
+            status_code=501,
+        )
+    timeline = data.timeline or {}
+    scenes = timeline.get("timeline") if isinstance(timeline, dict) else None
+    if not isinstance(scenes, list) or not scenes:
+        return JSONResponse(
+            {"error": "缺少 Timeline（timeline.timeline 至少要有一个分镜）"}, status_code=400
+        )
+
+    payload = {
+        "timeline": timeline,
+        "voice": data.voice or "mimo_default",
+        "cloneSpkId": data.cloneSpkId or "",
+        "gpu": data.gpu if data.gpu is not None else True,
+    }
+    if data.assets:
+        payload["assets"] = data.assets
+
+    try:
+        async with httpx.AsyncClient(timeout=900) as client:
+            response = await client.post(f"{render_url}/render", json=payload)
+    except httpx.HTTPError as error:
+        return JSONResponse(
+            {"error": f"无法连接渲染服务（可能 GPU 机没开机）：{error}"}, status_code=502
+        )
+
+    content_type = response.headers.get("content-type", "")
+    if response.status_code >= 400 or "application/json" in content_type:
+        try:
+            err = response.json()
+        except ValueError:
+            err = {"error": "渲染服务返回异常", "providerStatus": response.status_code}
+        return JSONResponse(
+            {"error": err.get("error") or "渲染失败", "providerStatus": response.status_code},
+            status_code=response.status_code if response.status_code >= 400 else 502,
+        )
+
+    return Response(
+        content=response.content,
+        media_type="video/mp4",
+        headers={"content-disposition": 'attachment; filename="3c-review.mp4"'},
+    )
 
 
 def build_rewrite_prompt(data: RewriteSceneInput) -> str:

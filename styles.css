@@ -430,6 +430,39 @@ textarea:focus {
   color: #fff;
 }
 
+.icon-button.render-btn {
+  background: var(--accent-grad);
+  border-color: transparent;
+  color: #fff;
+}
+
+.icon-button.is-busy {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.render-preview {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+
+.render-preview-title {
+  margin: 0 0 8px;
+  font-weight: 750;
+  color: var(--accent);
+}
+
+.render-preview video {
+  width: 100%;
+  max-width: 270px;
+  display: block;
+  border-radius: 10px;
+  background: #000;
+}
+
 .square-button {
   width: 36px;
   padding: 0;
