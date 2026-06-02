@@ -615,6 +615,71 @@ function productPrefix() {
   return els.productName.value.trim() || "这款产品";
 }
 
+/* ---- 抠图：浏览器本地、免费、开源（@imgly/background-removal，AGPL）---- */
+let _bgRemovalPromise = null;
+function loadBgRemoval() {
+  if (!_bgRemovalPromise) {
+    _bgRemovalPromise = import(
+      "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm"
+    ).then((m) => ({
+      removeBackground: m.removeBackground || (m.default && m.default.removeBackground)
+    }));
+  }
+  return _bgRemovalPromise;
+}
+
+async function runCutout(asset, btn) {
+  if (asset.busy) return;
+  asset.busy = true;
+  btn.disabled = true;
+  btn.textContent = "准备…";
+  try {
+    const { removeBackground } = await loadBgRemoval();
+    if (typeof removeBackground !== "function") {
+      throw new Error("抠图库加载失败");
+    }
+    const blob = await removeBackground(asset.originalUrl || asset.url, {
+      output: { format: "image/png" },
+      progress: (key, current, total) => {
+        if (typeof key === "string" && key.indexOf("fetch") === 0) {
+          const pct = total ? Math.round((current / total) * 100) : 0;
+          btn.textContent = `下载模型 ${pct}%`;
+        } else {
+          btn.textContent = "抠图中…";
+        }
+      }
+    });
+    asset.originalUrl = asset.originalUrl || asset.url;
+    if (asset.cutoutUrl) URL.revokeObjectURL(asset.cutoutUrl);
+    asset.cutoutUrl = URL.createObjectURL(blob);
+    asset.url = asset.cutoutUrl;
+    asset.cutout = true;
+    asset.busy = false;
+    renderAssets();
+    renderPreview(initialState.timeline);
+    setCueHint(`「${asset.name}」已抠出主体 ✓ 透明背景可直接用作画面`);
+  } catch (error) {
+    asset.busy = false;
+    btn.disabled = false;
+    btn.textContent = "一键抠图";
+    const msg = error && error.message ? error.message : String(error);
+    setCueHint(`抠图失败：${msg}（首次需联网下载模型，请重试）`);
+  }
+}
+
+function revertAsset(asset) {
+  if (!asset.originalUrl) return;
+  if (asset.cutoutUrl) {
+    URL.revokeObjectURL(asset.cutoutUrl);
+    asset.cutoutUrl = null;
+  }
+  asset.url = asset.originalUrl;
+  asset.cutout = false;
+  renderAssets();
+  renderPreview(initialState.timeline);
+  setCueHint(`「${asset.name}」已还原原图`);
+}
+
 function renderAssets() {
   if (!els.assetStrip) return;
   els.assetStrip.innerHTML = "";
@@ -623,17 +688,39 @@ function renderAssets() {
   }
 
   initialState.assets.forEach((asset) => {
-    const item = document.createElement("div");
-    item.className = "asset-thumb";
-    if (asset.type.startsWith("image/")) {
+    const card = document.createElement("div");
+    card.className = "asset-card";
+
+    const thumb = document.createElement("div");
+    thumb.className = "asset-thumb";
+    const isImage = asset.type.startsWith("image/");
+    if (isImage) {
+      if (asset.cutout) thumb.classList.add("is-cutout");
       const img = document.createElement("img");
       img.src = asset.url;
       img.alt = asset.name;
-      item.appendChild(img);
+      thumb.appendChild(img);
     } else {
-      item.textContent = "视频";
+      thumb.textContent = "视频";
     }
-    els.assetStrip.appendChild(item);
+    card.appendChild(thumb);
+
+    if (isImage) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "asset-cut-btn" + (asset.cutout ? " done" : "");
+      btn.textContent = asset.cutout ? "已抠图 · 还原" : "一键抠图";
+      btn.title = asset.cutout
+        ? "点击还原原图"
+        : "浏览器本地抠出主体（手机/耳机/手表），免费、不上传";
+      btn.addEventListener("click", () => {
+        if (asset.cutout) revertAsset(asset);
+        else runCutout(asset, btn);
+      });
+      card.appendChild(btn);
+    }
+
+    els.assetStrip.appendChild(card);
   });
 }
 
@@ -949,6 +1036,7 @@ function renderPreview(data) {
 
   els.productVisual.innerHTML = "";
   const asset = initialState.assets[initialState.currentScene % Math.max(initialState.assets.length, 1)];
+  els.productVisual.classList.toggle("is-cutout", Boolean(asset && asset.cutout));
   if (asset?.type.startsWith("image/")) {
     const img = document.createElement("img");
     img.src = asset.url;
