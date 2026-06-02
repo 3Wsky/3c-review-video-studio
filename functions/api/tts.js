@@ -37,6 +37,46 @@ export async function onRequestPost(context) {
   if (!text) {
     return jsonResponse({ error: "缺少要合成的口播文案 (text)" }, 400);
   }
+
+  // 克隆音色分支：转发到自部署的 CosyVoice 服务 (VOICE_CLONE_URL)
+  const wantsClone = String(input.voice || "").startsWith("clone") || input.cloneSpkId;
+  if (wantsClone) {
+    const cloneUrl = String(env.VOICE_CLONE_URL || "").trim().replace(/\/$/, "");
+    if (!cloneUrl) {
+      return jsonResponse(
+        { error: "克隆音色服务未配置（请设置环境变量 VOICE_CLONE_URL 指向 CosyVoice 服务）" },
+        501
+      );
+    }
+    const spkId = String(input.cloneSpkId || "").trim();
+    if (!spkId) {
+      return jsonResponse({ error: "缺少克隆音色 cloneSpkId（请先上传录音克隆音色）" }, 400);
+    }
+    let cloneFormat = String(input.format || "wav").toLowerCase();
+    if (!ALLOWED_FORMATS.includes(cloneFormat)) cloneFormat = "wav";
+    try {
+      const cloneResp = await fetch(`${cloneUrl}/tts`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, spk_id: spkId, format: cloneFormat })
+      });
+      const clonePayload = await cloneResp.json();
+      if (!cloneResp.ok || !clonePayload.audio) {
+        return jsonResponse(
+          { error: clonePayload.error || "克隆语音合成失败", providerStatus: cloneResp.status },
+          502
+        );
+      }
+      return jsonResponse({
+        audio: clonePayload.audio,
+        format: clonePayload.format || cloneFormat,
+        voice: "clone"
+      });
+    } catch (error) {
+      return jsonResponse({ error: error.message || "无法连接克隆语音服务" }, 502);
+    }
+  }
+
   const voice = String(input.voice || env.OPENAI_TTS_VOICE || DEFAULT_VOICE).trim();
   const style = String(input.style || "").trim();
   let format = String(input.format || DEFAULT_FORMAT).toLowerCase();

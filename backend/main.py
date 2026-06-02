@@ -19,7 +19,7 @@ import re
 import time
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -62,6 +62,7 @@ class TtsInput(BaseModel):
     voice: str | None = None
     style: str | None = None
     format: str | None = "mp3"
+    cloneSpkId: str | None = None
 
 
 class RewriteSceneInput(BaseModel):
@@ -324,7 +325,13 @@ async def health():
     has_key = bool(os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY"))
     model = os.environ.get("LLM_MODEL") or os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
     has_zhihu = bool(os.environ.get("ZHIHU_ACCESS_SECRET") or os.environ.get("ZHIHU_ACCESS_TOKEN"))
-    return {"ok": True, "hasApiKey": has_key, "model": model, "hasZhihu": has_zhihu}
+    return {
+        "ok": True,
+        "hasApiKey": has_key,
+        "model": model,
+        "hasZhihu": has_zhihu,
+        "hasVoiceClone": bool(_voice_clone_url()),
+    }
 
 
 @app.get("/api/zhihu-search")
@@ -448,8 +455,52 @@ async def generate_timeline(data: GenerateInput):
         return JSONResponse({"error": f"Timeline 生成失败: {error}"}, status_code=500)
 
 
+def _voice_clone_url() -> str:
+    return (os.environ.get("VOICE_CLONE_URL") or "").strip().rstrip("/")
+
+
 @app.post("/api/tts")
 async def tts(data: TtsInput):
+    text = (data.text or "").strip()[:MAX_TTS_TEXT]
+    if not text:
+        return JSONResponse({"error": "缺少要合成的口播文案 (text)"}, status_code=400)
+
+    # 克隆音色分支：转发到自部署的 CosyVoice 服务（VOICE_CLONE_URL）
+    if (data.voice or "").strip().startswith("clone") or data.cloneSpkId:
+        clone_url = _voice_clone_url()
+        if not clone_url:
+            return JSONResponse(
+                {"error": "克隆音色服务未配置（请设置环境变量 VOICE_CLONE_URL 指向 CosyVoice 服务）"},
+                status_code=501,
+            )
+        spk_id = (data.cloneSpkId or "").strip()
+        if not spk_id:
+            return JSONResponse({"error": "缺少克隆音色 cloneSpkId（请先上传录音克隆音色）"}, status_code=400)
+        fmt = (data.format or "wav").lower()
+        if fmt not in TTS_ALLOWED_FORMATS:
+            fmt = "wav"
+        try:
+            async with httpx.AsyncClient(timeout=180) as client:
+                response = await client.post(
+                    f"{clone_url}/tts",
+                    json={"text": text, "spk_id": spk_id, "format": fmt},
+                )
+        except httpx.HTTPError as error:
+            return JSONResponse({"error": f"无法连接克隆语音服务: {error}"}, status_code=502)
+        try:
+            payload = response.json()
+        except ValueError:
+            return JSONResponse(
+                {"error": "克隆语音服务返回非 JSON", "providerStatus": response.status_code},
+                status_code=502,
+            )
+        if response.status_code >= 400 or not payload.get("audio"):
+            return JSONResponse(
+                {"error": payload.get("error") or "克隆语音合成失败", "providerStatus": response.status_code},
+                status_code=502,
+            )
+        return {"audio": payload["audio"], "format": payload.get("format") or fmt, "voice": "clone"}
+
     api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
     base_url = (
         os.environ.get("LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or DEFAULT_BASE_URL
@@ -460,10 +511,6 @@ async def tts(data: TtsInput):
         return JSONResponse(
             {"error": "LLM_API_KEY (或 OPENAI_API_KEY) 未配置"}, status_code=501
         )
-
-    text = (data.text or "").strip()[:MAX_TTS_TEXT]
-    if not text:
-        return JSONResponse({"error": "缺少要合成的口播文案 (text)"}, status_code=400)
 
     voice = (data.voice or os.environ.get("OPENAI_TTS_VOICE") or DEFAULT_TTS_VOICE).strip()
     style = (data.style or "").strip()
@@ -520,6 +567,52 @@ async def tts(data: TtsInput):
         return JSONResponse({"error": "TTS 返回为空，未拿到音频数据"}, status_code=502)
 
     return {"audio": audio_data, "format": fmt, "voice": voice}
+
+
+@app.post("/api/voice-enroll")
+async def voice_enroll(
+    audio: UploadFile = File(...),
+    prompt_text: str = Form(...),
+    spk_id: str | None = Form(None),
+):
+    """把上传的录音 + 文字转发到自部署的 CosyVoice 服务克隆音色，返回 spkId。"""
+    clone_url = _voice_clone_url()
+    if not clone_url:
+        return JSONResponse(
+            {"error": "克隆音色服务未配置（请设置环境变量 VOICE_CLONE_URL 指向 CosyVoice 服务）"},
+            status_code=501,
+        )
+    if not (prompt_text or "").strip():
+        return JSONResponse({"error": "缺少录音文字 prompt_text（这段录音里你说了什么）"}, status_code=400)
+
+    raw = await audio.read()
+    if not raw:
+        return JSONResponse({"error": "音频为空"}, status_code=400)
+
+    files = {"audio": (audio.filename or "voice.wav", raw, audio.content_type or "application/octet-stream")}
+    form = {"prompt_text": prompt_text}
+    if (spk_id or "").strip():
+        form["spk_id"] = spk_id.strip()
+
+    try:
+        async with httpx.AsyncClient(timeout=180) as client:
+            response = await client.post(f"{clone_url}/enroll", data=form, files=files)
+    except httpx.HTTPError as error:
+        return JSONResponse({"error": f"无法连接克隆语音服务: {error}"}, status_code=502)
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return JSONResponse(
+            {"error": "克隆语音服务返回非 JSON", "providerStatus": response.status_code},
+            status_code=502,
+        )
+    if response.status_code >= 400 or not payload.get("spkId"):
+        return JSONResponse(
+            {"error": payload.get("error") or "音色克隆失败", "providerStatus": response.status_code},
+            status_code=502,
+        )
+    return {"spkId": payload["spkId"], "promptText": payload.get("promptText") or prompt_text}
 
 
 def build_rewrite_prompt(data: RewriteSceneInput) -> str:

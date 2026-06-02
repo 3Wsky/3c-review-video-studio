@@ -2,7 +2,7 @@
 
 > 这份文档记录项目的开发进度（已完成 / 进行中 / 待办）、架构、密钥位置和"换电脑如何续上"。
 > **每次有进展都要更新这份文件并提交，** 这样换设备 `git clone` 后就能接着开发。
-> 最近更新：2026-06（留人体检上线后）
+> 最近更新：2026-06（克隆音色 CosyVoice 自部署接入）
 
 ---
 
@@ -39,6 +39,7 @@
 | `OPENAI_BASE_URL` | `https://token-plan-cn.xiaomimimo.com/v1` | Token Plan 专属地址（≠ 按量付费的 api.xiaomimimo.com） |
 | `OPENAI_MODEL` | `MiMo-V2.5` | 文本生成模型 |
 | `ZHIHU_ACCESS_SECRET` | 知乎 Access Secret（Secret） | 知乎搜索鉴权 |
+| `VOICE_CLONE_URL` | 自部署 CosyVoice 服务的公网地址（可选） | 配置后「我的克隆音色」可用，见 `voice-clone/README.md` |
 
 > 本地跑 FastAPI 时同名变量放 `backend/.env`（参考 `backend/.env.example`），不要提交真实密钥。
 
@@ -61,13 +62,14 @@
 - [x] **一键导出**（PR #12）：工具栏「导出 ▾」下拉，导出 口播稿 `.txt` / 字幕 `.srt`（按每镜时长算连续时间码）/ 分镜表 `.csv`（带 BOM，Excel 不乱码）/ 方案 `.md`。纯前端，导出不依赖后端。
 - [x] **逐镜重生**（PR #14）：每个镜头编辑区「重写本镜」按钮，只把这一镜送 MiMo 重写（保留时长 + 留人角色：钩子/高潮/反转 不变），就地替换、不动其它镜。新增 `functions/api/rewrite-scene.js`（+ FastAPI `/api/rewrite-scene` 镜像），带「上一镜口播 + 下一镜标题」做衔接，temperature 0.85 保证每次不同。已在生产用华为Nova16 验证。
 - [x] **图片一键抠图**（PR #15）：高级设置素材区上传图片后，缩略图下「一键抠图」浏览器本地抠出主体（手机/耳机/手表），免费、不上传服务器、无 API key。用开源 `@imgly/background-removal`（AGPL，浏览器内 ONNX/WASM），CDN 懒加载，输出透明 PNG 直接用作画面预览；可「还原」原图。仓库已公开，AGPL 不冲突。
+- [x] **克隆音色（CosyVoice 自部署）**：高级设置「克隆我的音色」上传一段 5–10s 录音 + 这段录音的文字 → 零样本克隆出你的音色，音色下拉多一项「我的克隆音色」，每镜「试听配音」即用你的声音。模型用开源 CosyVoice2-0.5B（需 GPU，RTX 50 系列要 cu128 PyTorch）。新增独立 GPU 服务 `voice-clone/`（`server.py` 提供 `/enroll` `/tts`，`deploy.sh` 一键部署，`README.md` 含 5060/Blackwell 注意事项）；主站点新增 `/api/voice-enroll` + `/api/tts` 克隆分支（Cloudflare Function 与 FastAPI 两处同步），通过 `VOICE_CLONE_URL` 转发。GPU 离线时返回明确报错、可退回 MiMo 预设音色。spkId 用 localStorage(`cloneVoice_v1`) 持久化。
 - [x] **留人体检**（PR #16）：工具栏「留人体检」按钮，纯前端启发式给当前脚本打「留人分」（0-100 + 优秀/良好/及格/待优化），五个维度：开场5秒钩子(30%)/钩子连贯·不停留人(25%)/节奏拉扯(20%)/结尾结论+互动(15%)/语速时长匹配(10%)。弹窗里环形总分 + 维度条 + 逐镜诊断（标出弱钩子、过长镜头、语速不匹配、缺承接钩子/CTA），每个有问题的镜头可「去编辑」或一键「重写本镜」（复用 PR #14）。判定靠关键词词库（HOOK/LOOP/CTA/CONCLUSION）+ 时长/语速规则，不调后端、不花钱。`scoreRetention()` / `openCheckup()` 在 `app.js`。
 
 ---
 
 ## 5. 进行中 🚧
 
-- （暂无）下一项待定：移动端适配 / 视频渲染管线（见下）。
+- **视频渲染管线**（下一块）：TTS → 字幕对齐 → ffmpeg 渲 MP4 → R2，计划与克隆服务并列跑在同一台自有 GPU 机（RTX 5060，白天在线）。
 
 ---
 
