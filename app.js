@@ -76,6 +76,7 @@ const els = {
   exportScriptBtn: document.querySelector("#exportScriptBtn"),
   exportSrtBtn: document.querySelector("#exportSrtBtn"),
   exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
+  renderVideoBtn: document.querySelector("#renderVideoBtn"),
   track: document.querySelector("#track"),
   trackRuler: document.querySelector("#trackRuler"),
   clipEditor: document.querySelector("#clipEditor"),
@@ -1342,6 +1343,107 @@ function exportShotlist() {
   downloadFile(`${safeName()}_分镜表.csv`, csv, "text/csv;charset=utf-8");
 }
 
+/* ---- 渲染视频：把当前 Timeline 发到渲染 worker（RENDER_URL），出片 MP4 ---- */
+let lastRenderUrl = "";
+
+function setRenderBtn(label, busy) {
+  const btn = els.renderVideoBtn;
+  if (!btn) return;
+  const span = btn.querySelector("span");
+  if (span) span.textContent = label;
+  btn.disabled = Boolean(busy);
+  btn.classList.toggle("is-busy", Boolean(busy));
+}
+
+async function renderVideo() {
+  const data = currentTimeline();
+  if (!data.timeline || !data.timeline.length) {
+    setCueHint("还没有分镜可渲染，先生成脚本。");
+    return;
+  }
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setCueHint("渲染需要部署后端（本地 file:// 无法调用渲染服务）。");
+    return;
+  }
+  const voice = getSelectedVoice();
+  if (voice === "clone" && !initialState.cloneSpkId) {
+    setCueHint("选了「我的克隆音色」但还没克隆，请先在「高级设置」上传录音，或换预设音色。");
+    return;
+  }
+
+  if (lastRenderUrl) {
+    URL.revokeObjectURL(lastRenderUrl);
+    lastRenderUrl = "";
+  }
+  setRenderBtn("渲染中…", true);
+  setCueHint("正在渲染视频：逐镜配音 → 按真实时长校准 → HyperFrames 出片，首次可能要 2-3 分钟，请稍候…");
+
+  const body = { timeline: data, voice };
+  if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
+
+  try {
+    const response = await fetch(`${apiBase}/api/render`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const type = response.headers.get("content-type") || "";
+    if (!response.ok || type.includes("application/json")) {
+      let message = "渲染失败";
+      try {
+        const err = await response.json();
+        message = err.error || message;
+      } catch (e) {
+        /* ignore */
+      }
+      if (response.status === 501) {
+        message = "渲染服务未配置：请在后端设置 RENDER_URL 指向你的渲染 worker（见 video-render/README）。";
+      } else if (response.status === 502) {
+        message = `连不上渲染服务，GPU 机可能没开机：${message}`;
+      }
+      setCueHint(message);
+      setRenderBtn("渲染视频", false);
+      return;
+    }
+    const blob = await response.blob();
+    lastRenderUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = lastRenderUrl;
+    link.download = `${safeName()}.mp4`;
+    link.click();
+    showRenderPreview(lastRenderUrl);
+    const mb = (blob.size / 1024 / 1024).toFixed(1);
+    setCueHint(`渲染完成 ✓ 已下载 ${mb}MB MP4，下方可直接预览。`);
+  } catch (error) {
+    setCueHint(`渲染请求出错：${error.message || error}`);
+  } finally {
+    setRenderBtn("渲染视频", false);
+  }
+}
+
+function showRenderPreview(url) {
+  let host = document.querySelector("#renderPreview");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "renderPreview";
+    host.className = "render-preview";
+    const anchor = els.jsonOutput && els.jsonOutput.closest("section");
+    (anchor || document.body).insertBefore(host, anchor || null);
+  }
+  host.innerHTML = "";
+  const title = document.createElement("p");
+  title.className = "render-preview-title";
+  title.textContent = "成片预览";
+  const video = document.createElement("video");
+  video.src = url;
+  video.controls = true;
+  video.playsInline = true;
+  host.appendChild(title);
+  host.appendChild(video);
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 /* ---- 留人体检：纯前端启发式给脚本打"留人分" + 逐镜诊断 ---- */
 const HOOK_WORDS = ["别急", "先别", "别划", "别走", "居然", "竟然", "没想到", "真相", "千万", "避坑", "踩坑", "后悔", "为什么", "凭什么", "到底", "一个字", "反常识", "真的假的", "谁懂", "震惊", "离谱", "劝你", "原来", "结果", "都说", "你以为"];
 const LOOP_WORDS = ["往下看", "接着看", "别走", "别划", "关键", "重点", "到底", "一旦", "你猜", "接下来", "敲黑板", "注意看", "马上", "下一个", "继续看", "看完", "后面", "更"];
@@ -1757,6 +1859,8 @@ function bindEvents() {
   if (els.exportScriptBtn) els.exportScriptBtn.addEventListener("click", () => { exportScript(); closeExportMenu(); });
   if (els.exportSrtBtn) els.exportSrtBtn.addEventListener("click", () => { exportSrt(); closeExportMenu(); });
   if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
+
+  if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
 
   els.copyPromptBtn.addEventListener("click", async () => {
     const prompt = buildPrompt();

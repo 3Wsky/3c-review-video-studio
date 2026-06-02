@@ -5,10 +5,11 @@
 它跑在你的 **GPU 台式机（RTX 5060）** 上，主站点（Cloudflare）只负责生成脚本/Timeline，
 **长时间渲染必须放外部 worker**。
 
-> 当前状态：**Timeline JSON → HTML 自动生成已打通**。`build.mjs` 把导演台的
-> Timeline JSON 自动转成 9:16 合成 HTML（每个分镜一段 `.scene.clip`，按 `data-start`
-> 平铺，配 Ken Burns + 标题/字幕淡入 + 数字高亮）。`index.html` 即由
-> `samples/timeline.sample.json` 生成的演示产物。下一步接 `/api/render` 转发 + 配音校准。
+> 当前状态：**worker 一站式出片已打通**。`worker.mjs` 收 Timeline JSON + 音色
+> → 逐镜配音、ffprobe 读真实时长校准每镜 → `build.mjs` 生成 HTML → `hyperframes render`
+> → ffmpeg 拼接声轨混音 → 返回 MP4。主站点用 `RENDER_URL` 转发（`/api/render`），
+> 前端有「渲染视频」按钮；GPU 机离线时前端明确提示。`index.html` 仍是由
+> `samples/timeline.sample.json` 生成的演示产物。
 
 ---
 
@@ -56,7 +57,41 @@ bash render.sh            # 再渲成 MP4
 - **确定性**：不用 `Date.now()`/`Math.random()`，相同输入产出相同 HTML（符合 HyperFrames 渲染要求）。
 - `index.html` 顶部标了「由 build.mjs 自动生成，请勿手改」——要改样式/动画请改 `build.mjs`。
 
-`buildHtml(timeline, { assetsDir })` 也作为 ES 模块导出，供后续渲染 worker 程序化调用。
+`buildHtml(timeline, { assetsDir })` 也作为 ES 模块导出，供渲染 worker 程序化调用。
+
+---
+
+## 渲染 worker（一站式出片，跨在 5060 上）
+
+`worker.mjs` 是一个轻量 HTTP 服务（只用 Node 内置模块，无第三方 npm 依赖），
+和克隆音色服务并列。主站点（Cloudflare / backend）用 `RENDER_URL` 转发到它。
+
+```bash
+cd video-render
+export OPENAI_API_KEY=...          # MiMo/OpenAI 兼容 key（逐镜配音；缺了就静音兜底）
+export OPENAI_BASE_URL=...          # 默认 https://api.openai.com/v1
+export VOICE_CLONE_URL=...          # 可选：克隆音色服务（voice=clone 时用）
+bash worker.start.sh               # 默认听 :9234
+```
+
+接口：
+- `GET /health` → `{ ok, hasLLM, hasClone, hyperframes }`，用于探活。
+- `POST /render`，请求体 `{ timeline, voice, cloneSpkId?, gpu?, assets? }`，成功返回 `video/mp4` 二进制，
+  出错返回 JSON `{ error }`。
+
+出片流程（每个请求在临时目录里独立完成）：
+1. 逐镜调 TTS/克隆服务合成音频；拿不到（无 key / 克隆离线）则用静音兜底，仍能出片。
+2. `ffprobe` 读每镜真实音频时长 → 校准每镜 `duration`（配音时长 + 尾音）。
+3. `buildHtml()` 生成合成 HTML。
+4. `hyperframes render`（带 `gpu:true` 则 `--gpu` 走 NVENC）→ 无声视频。
+5. ffmpeg 把逐镜音频按时长拼成声轨并混入 → 最终 MP4。
+
+主站点配置：在后端设 `RENDER_URL=https://your-gpu-host:9234`（与 `VOICE_CLONE_URL` 并列）。
+未配置返 501、连不上返 502，前端都会给明确提示不卡死。
+
+> 说明：现在 worker 同步返回 MP4（渲染完才响应）。若通过 Cloudflare 转发且成片较长，
+> 可能撞到边缘子请求超时；这时可把前端“后端地址”直指你自部署的 FastAPI backend（`/api/render`，
+> 超时 900s），或后续改成任务队列 + 轮询。
 
 ---
 
@@ -129,6 +164,8 @@ export HYPERFRAMES_BROWSER_PATH=$PRODUCER_HEADLESS_SHELL_PATH
 ```
 video-render/
   build.mjs          # Timeline JSON → 合成 HTML 生成器（核心）
+  worker.mjs         # 渲染 worker HTTP 服务（配音+校准+渲染+混音 → MP4）
+  worker.start.sh    # 一键启动 worker
   samples/
     timeline.sample.json  # 示例 Timeline（5 镜，结构同导演台产物）
   index.html         # 由 build.mjs 从样例生成的演示合成（请勿手改）
@@ -145,8 +182,6 @@ video-render/
 ## 路线（后续 PR）
 
 1. ~~**Timeline → 模板生成**：把导演台的 Timeline JSON 自动转成这套 HTML（每镜一段 clip）。~~ ✅ 本 PR 已完成（`build.mjs`）。
-2. **配音对齐**：复用 `/api/tts`（含克隆音色）合成每镜音频，按真实时长校准 `data-duration`；
-   可选 `hyperframes transcribe` 出逐词时间戳做卡拉OK字幕。
-3. **`/api/render` 转发**：主站点加渲染按钮，用 `RENDER_URL` 转发到本 worker（与 `VOICE_CLONE_URL` 并列），
-   GPU 机离线时前端给降级提示。
-4. **数据可视化参数卡 / 横评对比 / 多端裁剪（9:16·16:9·封面）**。
+2. ~~**配音对齐 + `/api/render` 转发**：worker 逐镜配音、按真实时长校准 `duration`，主站点用 `RENDER_URL` 转发，前端加渲染按钮+离线降级。~~ ✅ 本 PR 已完成。
+3. **逐词字幕**：可选 `hyperframes transcribe` 出逐词时间戳做卡拉OK字幕。
+4. **数据可视化参数卡 / 横评对比 / Pexels 素材源 / 多端裁剪（9:16·16:9·封面）**。
