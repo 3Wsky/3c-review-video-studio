@@ -1467,3 +1467,161 @@ textarea:focus {
     margin: 0 auto;
   }
 }
+
+/* 留人体检按钮高亮 */
+.icon-button.checkup-btn {
+  border-color: rgba(177, 107, 255, 0.55);
+  color: #f3e9ff;
+}
+.icon-button.checkup-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* 留人体检弹窗 */
+.checkup-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+  background: rgba(4, 4, 10, 0.66);
+  backdrop-filter: blur(6px);
+  overflow-y: auto;
+  animation: ckFade 0.16s ease;
+}
+@keyframes ckFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.checkup-card {
+  width: min(760px, 100%);
+  background: linear-gradient(180deg, rgba(28, 28, 42, 0.96), rgba(18, 18, 28, 0.96));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.checkup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.checkup-head h3 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+}
+.checkup-head h3 svg { width: 18px; height: 18px; color: var(--accent); }
+.checkup-head p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+.ck-close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ck-close svg { width: 16px; height: 16px; }
+.checkup-body { padding: 18px 20px; }
+
+.ck-overall {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 22px;
+  align-items: center;
+}
+.ck-ring {
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.ck-ring-in {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #14141f;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.ck-ring-in strong { font-size: 34px; line-height: 1; }
+.ck-ring-in small { margin-top: 4px; font-size: 13px; font-weight: 700; }
+
+.ck-dims { display: flex; flex-direction: column; gap: 10px; }
+.ck-dim-top { display: flex; justify-content: space-between; font-size: 13px; }
+.ck-dim-top strong { font-size: 13px; }
+.ck-bar {
+  margin: 4px 0 2px;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.ck-bar i { display: block; height: 100%; border-radius: 4px; }
+.ck-dim-note { font-size: 11.5px; color: var(--muted); }
+
+.ck-scenes-title {
+  margin: 20px 0 10px;
+  font-weight: 700;
+  font-size: 14px;
+}
+.ck-scenes { display: flex; flex-direction: column; gap: 10px; }
+.ck-scene {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(10, 10, 18, 0.45);
+}
+.ck-scene.is-weak { border-color: rgba(255, 107, 107, 0.4); }
+.ck-scene-head { display: flex; align-items: center; gap: 10px; }
+.ck-no {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--accent-soft);
+  color: #f0e6ff;
+}
+.ck-scene-title { flex: 1; font-weight: 600; font-size: 14px; }
+.ck-score {
+  font-weight: 800;
+  font-size: 14px;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 1px 8px;
+}
+.ck-issues { margin: 8px 0 0; padding-left: 18px; }
+.ck-issues li { font-size: 12.5px; color: #d8b6b6; margin: 3px 0; }
+.ck-ok { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
+.ck-scene-actions { display: flex; gap: 8px; margin-top: 10px; }
+.ck-scene-actions .icon-button { padding: 5px 10px; font-size: 12px; }
+.ck-scene-actions .ck-rewrite { border-color: rgba(177, 107, 255, 0.55); }
+
+.checkup-foot {
+  margin: 0;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+@media (max-width: 620px) {
+  .ck-overall { grid-template-columns: 1fr; justify-items: center; }
+  .ck-dims { width: 100%; }
+}
