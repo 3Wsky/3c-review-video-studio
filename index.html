@@ -122,9 +122,17 @@
             <button class="icon-button" id="downloadJsonBtn" type="button">
               <i data-lucide="download"></i><span>JSON</span>
             </button>
-            <button class="icon-button" id="downloadBriefBtn" type="button">
-              <i data-lucide="file-down"></i><span>方案</span>
-            </button>
+            <div class="export-menu" id="exportMenu">
+              <button class="icon-button" id="exportToggle" type="button" aria-haspopup="true" aria-expanded="false" title="导出口播稿 / 字幕 / 分镜表">
+                <i data-lucide="file-down"></i><span>导出</span><i data-lucide="chevron-down"></i>
+              </button>
+              <div class="export-dropdown" id="exportDropdown" role="menu">
+                <button class="export-item" id="exportScriptBtn" type="button" role="menuitem">口播稿 .txt</button>
+                <button class="export-item" id="exportSrtBtn" type="button" role="menuitem">字幕 .srt</button>
+                <button class="export-item" id="exportShotlistBtn" type="button" role="menuitem">分镜表 .csv</button>
+                <button class="export-item" id="downloadBriefBtn" type="button" role="menuitem">方案 .md</button>
+              </div>
+            </div>
             <button class="icon-button" id="resetBtn" type="button" title="清空草稿，重新开始">
               <i data-lucide="rotate-ccw"></i><span>重置</span>
             </button>

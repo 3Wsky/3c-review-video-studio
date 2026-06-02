@@ -68,6 +68,11 @@ const els = {
   copyPromptBtn: document.querySelector("#copyPromptBtn"),
   downloadJsonBtn: document.querySelector("#downloadJsonBtn"),
   downloadBriefBtn: document.querySelector("#downloadBriefBtn"),
+  exportMenu: document.querySelector("#exportMenu"),
+  exportToggle: document.querySelector("#exportToggle"),
+  exportScriptBtn: document.querySelector("#exportScriptBtn"),
+  exportSrtBtn: document.querySelector("#exportSrtBtn"),
+  exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
   track: document.querySelector("#track"),
   trackRuler: document.querySelector("#trackRuler"),
   clipEditor: document.querySelector("#clipEditor"),
@@ -990,6 +995,77 @@ function downloadBrief() {
   downloadFile("3c-video-brief.md", lines.join("\n"), "text/markdown");
 }
 
+function currentTimeline() {
+  return initialState.timeline || buildTimeline();
+}
+
+function srtTime(seconds) {
+  const total = Math.max(0, Math.round(seconds * 1000));
+  const ms = total % 1000;
+  const s = Math.floor(total / 1000) % 60;
+  const m = Math.floor(total / 60000) % 60;
+  const h = Math.floor(total / 3600000);
+  const pad = (n, len = 2) => String(n).padStart(len, "0");
+  return `${pad(h)}:${pad(m)}:${pad(s)},${pad(ms, 3)}`;
+}
+
+function safeName() {
+  const name = (currentTimeline().project?.product || "3c-video").trim();
+  return name.replace(/[\\/:*?"<>|\s]+/g, "_") || "3c-video";
+}
+
+function exportScript() {
+  const data = currentTimeline();
+  const lines = [`【${data.project.product}】口播稿 · 共${data.timeline.length}镜 · ${data.project.targetDuration}s`, ""];
+  data.timeline.forEach((scene) => {
+    lines.push(`${scene.index}. ${scene.title}（${scene.duration || (scene.end - scene.start)}s）`);
+    lines.push(scene.voiceover);
+    lines.push("");
+  });
+  downloadFile(`${safeName()}_口播稿.txt`, lines.join("\n"), "text/plain;charset=utf-8");
+}
+
+function exportSrt() {
+  const data = currentTimeline();
+  let cursor = 0;
+  const blocks = data.timeline.map((scene, i) => {
+    const dur = Number(scene.duration) || Number(scene.end - scene.start) || 3;
+    const start = cursor;
+    const end = cursor + dur;
+    cursor = end;
+    const text = (scene.subtitle || scene.voiceover || "").trim();
+    return `${i + 1}\n${srtTime(start)} --> ${srtTime(end)}\n${text}\n`;
+  });
+  downloadFile(`${safeName()}_字幕.srt`, blocks.join("\n"), "text/plain;charset=utf-8");
+}
+
+function csvCell(value) {
+  const text = String(value == null ? "" : value).replace(/"/g, '""');
+  return `"${text}"`;
+}
+
+function exportShotlist() {
+  const data = currentTimeline();
+  const header = ["序号", "节奏标题", "开始(s)", "结束(s)", "时长(s)", "画面类型", "画面标题", "画面说明", "口播文案"];
+  const rows = data.timeline.map((scene) =>
+    [
+      scene.index,
+      scene.title,
+      scene.start,
+      scene.end,
+      scene.duration || Number((scene.end - scene.start).toFixed(2)),
+      scene.visual?.type || "",
+      scene.visual?.headline || "",
+      scene.visual?.detail || "",
+      scene.voiceover || ""
+    ]
+      .map(csvCell)
+      .join(",")
+  );
+  const csv = "\ufeff" + [header.map(csvCell).join(","), ...rows].join("\r\n");
+  downloadFile(`${safeName()}_分镜表.csv`, csv, "text/csv;charset=utf-8");
+}
+
 const DRAFT_KEY = "directorDraft_v1";
 
 function saveDraft() {
@@ -1131,6 +1207,27 @@ function bindEvents() {
   });
 
   els.downloadBriefBtn.addEventListener("click", downloadBrief);
+
+  function closeExportMenu() {
+    if (!els.exportMenu) return;
+    els.exportMenu.classList.remove("open");
+    if (els.exportToggle) els.exportToggle.setAttribute("aria-expanded", "false");
+  }
+
+  if (els.exportToggle && els.exportMenu) {
+    els.exportToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = els.exportMenu.classList.toggle("open");
+      els.exportToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    document.addEventListener("click", (event) => {
+      if (!els.exportMenu.contains(event.target)) closeExportMenu();
+    });
+  }
+
+  if (els.exportScriptBtn) els.exportScriptBtn.addEventListener("click", () => { exportScript(); closeExportMenu(); });
+  if (els.exportSrtBtn) els.exportSrtBtn.addEventListener("click", () => { exportSrt(); closeExportMenu(); });
+  if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
 
   els.copyPromptBtn.addEventListener("click", async () => {
     const prompt = buildPrompt();
