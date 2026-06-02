@@ -1167,6 +1167,16 @@ textarea:focus {
   animation: spin 0.9s linear infinite;
 }
 
+.icon-button.is-loading {
+  opacity: 0.85;
+  cursor: progress;
+  pointer-events: none;
+}
+
+.icon-button.is-loading svg {
+  animation: spin 0.9s linear infinite;
+}
+
 /* 生成中的轨道骨架占位 */
 @keyframes shimmer {
   0% {
