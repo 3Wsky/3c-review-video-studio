@@ -77,6 +77,11 @@ const els = {
   exportSrtBtn: document.querySelector("#exportSrtBtn"),
   exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
   renderVideoBtn: document.querySelector("#renderVideoBtn"),
+  stockQuery: document.querySelector("#stockQuery"),
+  stockSearchBtn: document.querySelector("#stockSearchBtn"),
+  stockGrid: document.querySelector("#stockGrid"),
+  stockTip: document.querySelector("#stockTip"),
+  autoStockToggle: document.querySelector("#autoStockToggle"),
   track: document.querySelector("#track"),
   trackRuler: document.querySelector("#trackRuler"),
   clipEditor: document.querySelector("#clipEditor"),
@@ -1381,6 +1386,7 @@ async function renderVideo() {
 
   const body = { timeline: data, voice };
   if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
+  if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
 
   try {
     const response = await fetch(`${apiBase}/api/render`, {
@@ -1442,6 +1448,68 @@ function showRenderPreview(url) {
   host.appendChild(title);
   host.appendChild(video);
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---- 素材库：搜免费可商用空镜（Pexels/Pixabay）---- */
+function setStockTip(text) {
+  if (els.stockTip) els.stockTip.textContent = text;
+}
+
+async function searchStock() {
+  const query = (els.stockQuery && els.stockQuery.value.trim()) || "";
+  if (!query) {
+    setStockTip("先输入搜索关键词（建议用英文，如 smartphone、headphone）。");
+    return;
+  }
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setStockTip("素材搜索需要部署后端（本地 file:// 无法调用）。");
+    return;
+  }
+  if (els.stockGrid) els.stockGrid.innerHTML = "";
+  setStockTip("搜索中…");
+  try {
+    const url = `${apiBase}/api/stock?query=${encodeURIComponent(query)}&type=photo&orientation=portrait&perPage=15`;
+    const response = await fetch(url);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStockTip(data.error || "素材搜索失败，请稍后再试。");
+      return;
+    }
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) {
+      setStockTip(`「${query}」没搜到素材，换个关键词试试（英文命中率更高）。`);
+      return;
+    }
+    renderStockGrid(items);
+    setStockTip(`找到 ${items.length} 条（来源：${(data.providers || []).join(" / ") || "—"}）。点缩略图看出处；勾选下方「自动空镜」让渲染缺图时自动用。`);
+  } catch (error) {
+    setStockTip(`素材搜索失败：${error.message || error}`);
+  }
+}
+
+function renderStockGrid(items) {
+  if (!els.stockGrid) return;
+  els.stockGrid.innerHTML = "";
+  items.forEach((it) => {
+    if (!it.thumb) return;
+    const fig = document.createElement("a");
+    fig.className = "stock-cell";
+    fig.href = it.sourceUrl || it.url || "#";
+    fig.target = "_blank";
+    fig.rel = "noopener noreferrer";
+    fig.title = `${it.provider} · ${it.author || ""}`.trim();
+    const img = document.createElement("img");
+    img.src = it.thumb;
+    img.alt = it.alt || "";
+    img.loading = "lazy";
+    const tag = document.createElement("span");
+    tag.className = "stock-cell-tag";
+    tag.textContent = it.provider;
+    fig.appendChild(img);
+    fig.appendChild(tag);
+    els.stockGrid.appendChild(fig);
+  });
 }
 
 /* ---- 留人体检：纯前端启发式给脚本打"留人分" + 逐镜诊断 ---- */
@@ -1861,6 +1929,14 @@ function bindEvents() {
   if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
 
   if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
+  if (els.stockSearchBtn) els.stockSearchBtn.addEventListener("click", searchStock);
+  if (els.stockQuery)
+    els.stockQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchStock();
+      }
+    });
 
   els.copyPromptBtn.addEventListener("click", async () => {
     const prompt = buildPrompt();
