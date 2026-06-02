@@ -64,6 +64,18 @@ class TtsInput(BaseModel):
     format: str | None = "mp3"
 
 
+class RewriteSceneInput(BaseModel):
+    productName: str | None = None
+    category: str | None = None
+    platform: str | None = None
+    facts: str | None = None
+    reviews: str | None = None
+    scene: dict | None = None
+    prevVoiceover: str | None = None
+    nextTitle: str | None = None
+    note: str | None = None
+
+
 DEFAULT_TTS_MODEL = "mimo-v2.5-tts"
 DEFAULT_TTS_VOICE = "mimo_default"
 TTS_ALLOWED_FORMATS = {"mp3", "wav", "opus", "flac"}
@@ -508,3 +520,132 @@ async def tts(data: TtsInput):
         return JSONResponse({"error": "TTS 返回为空，未拿到音频数据"}, status_code=502)
 
     return {"audio": audio_data, "format": fmt, "voice": voice}
+
+
+def build_rewrite_prompt(data: RewriteSceneInput) -> str:
+    scene = data.scene or {}
+    product = data.productName or "本产品"
+    role = scene.get("title") or "这一镜"
+    try:
+        duration = float(scene.get("duration") or (scene.get("end", 0) - scene.get("start", 0)) or 10)
+    except (TypeError, ValueError):
+        duration = 10
+    note = (data.note or "").strip()
+    visual = scene.get("visual") or {}
+    visual_type = visual.get("type") or "真人口播 + 产品图"
+    extra = f"\n5. 额外要求：{note}" if note else ""
+
+    return f"""你是数码 3C 短视频编导。现在只需要重写一条竖屏短视频里的【单个分镜】，其它分镜保持不动。
+
+【这一镜在留人结构中的角色】{role}
+【这一镜目标时长】约 {duration:g} 秒（中文短句，适合 TTS 朗读，不要超过这个时长能念完的字数）
+【整条视频的产品】只能评测「{product}」，绝不能写进其它型号/品牌/系列/芯片/价格/参数。
+
+【上下文（不要改写它们，只用来衔接）】
+- 上一镜口播：{clamp_text(data.prevVoiceover, 300) or "（无，这是第一镜）"}
+- 下一镜标题：{data.nextTitle or "（无，这是最后一镜）"}
+
+【重写要求】
+1. 保持这一镜原本的留人角色与情绪定位（钩子就要抓人，高潮就要情绪最高，反转就要诚实讲短板，结尾就要给结论+互动）。
+2. 用自己的话写，口语化、多短句、有张力；结尾留一个自然引向下一镜的开放回路钩子（最后一镜则给明确购买结论 + 一句互动引导）。
+3. 不得编造参数、价格、跑分、续航、芯片、降噪等级等事实；资料不足就降低确定性或说“资料未提供”，但仍要保持钩子和节奏。
+4. 必须给出一个和原来不同的新版本（换个角度/说法/钩子），不要原样返回。{extra}
+
+【输出】严格 JSON，不要 markdown、不要代码块、不要解释：
+{{
+  "title": "{role}",
+  "voiceover": "重写后的口播文案",
+  "subtitle": "用于字幕的精简版（可与口播相同）",
+  "visual": {{ "type": "{visual_type}", "headline": "画面大字标题（短）", "detail": "画面说明（短）" }}
+}}
+
+产品名：{product}
+品类：{data.category or "未提供"}
+平台：{data.platform or "未提供"}
+
+产品事实：
+{clamp_text(data.facts, 1800)}
+
+真实评测素材（可能混有多款产品，仅供了解品类共性，不要照搬其中型号/品牌/参数）：
+{clamp_text(data.reviews, 2500)}"""
+
+
+@app.post("/api/rewrite-scene")
+async def rewrite_scene(data: RewriteSceneInput):
+    api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    base_url = (
+        os.environ.get("LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or DEFAULT_BASE_URL
+    ).rstrip("/")
+    model = os.environ.get("LLM_MODEL") or os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
+
+    if not api_key:
+        return JSONResponse(
+            {"error": "LLM_API_KEY (或 OPENAI_API_KEY) 未配置"}, status_code=501
+        )
+
+    if not data.scene:
+        return JSONResponse({"error": "缺少要重写的镜头 (scene)"}, status_code=400)
+
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                f"{base_url}/chat/completions",
+                headers={
+                    "authorization": f"Bearer {api_key}",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "temperature": 0.85,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "你只输出严格 JSON。不要输出 markdown、代码块或解释。",
+                        },
+                        {"role": "user", "content": build_rewrite_prompt(data)},
+                    ],
+                },
+            )
+    except httpx.HTTPError as error:
+        return JSONResponse({"error": f"无法连接 LLM 服务: {error}"}, status_code=502)
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return JSONResponse(
+            {"error": "LLM 返回非 JSON", "providerStatus": response.status_code},
+            status_code=502,
+        )
+
+    if response.status_code >= 400:
+        message = (payload.get("error") or {})
+        message = message.get("message") if isinstance(message, dict) else None
+        return JSONResponse(
+            {"error": message or "LLM provider request failed", "providerStatus": response.status_code},
+            status_code=502,
+        )
+
+    try:
+        content = payload["choices"][0]["message"]["content"]
+        parsed = json.loads(strip_json_fence(content))
+    except (KeyError, IndexError, ValueError) as error:
+        return JSONResponse({"error": f"重写失败: {error}"}, status_code=500)
+
+    voiceover = str(parsed.get("voiceover") or parsed.get("subtitle") or "").strip()
+    if not voiceover:
+        return JSONResponse({"error": "重写返回为空"}, status_code=502)
+
+    src_scene = data.scene or {}
+    src_visual = src_scene.get("visual") or {}
+    parsed_visual = parsed.get("visual") or {}
+    return {
+        "title": str(parsed.get("title") or src_scene.get("title") or "").strip(),
+        "voiceover": voiceover,
+        "subtitle": str(parsed.get("subtitle") or voiceover).strip(),
+        "visual": {
+            "type": str(parsed_visual.get("type") or src_visual.get("type") or "真人口播 + 产品图").strip(),
+            "headline": str(parsed_visual.get("headline") or "").strip(),
+            "detail": str(parsed_visual.get("detail") or "").strip(),
+        },
+    }
