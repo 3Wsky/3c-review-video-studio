@@ -2,7 +2,7 @@
 
 > 这份文档记录项目的开发进度（已完成 / 进行中 / 待办）、架构、密钥位置和"换电脑如何续上"。
 > **每次有进展都要更新这份文件并提交，** 这样换设备 `git clone` 后就能接着开发。
-> 最近更新：2026-06（视频渲染管线地基：HyperFrames `video-render/`）
+> 最近更新：2026-06（B/C/D/E/F 五大功能已全部合并进 main；正在 Windows 5060 上部署两个 GPU 服务）
 
 ---
 
@@ -40,9 +40,18 @@
 | `OPENAI_MODEL` | `MiMo-V2.5` | 文本生成模型 |
 | `ZHIHU_ACCESS_SECRET` | 知乎 Access Secret（Secret） | 知乎搜索鉴权 |
 | `VOICE_CLONE_URL` | 自部署 CosyVoice 服务的公网地址（可选） | 配置后「我的克隆音色」可用，见 `voice-clone/README.md` |
-| `RENDER_URL` | 自部署视频渲染 worker 的公网地址（可选，未接前端） | 规划中，见 `video-render/README.md` |
+| `RENDER_URL` | 自部署视频渲染 worker 的公网地址（可选） | 「渲染视频/图文封面」按钮要用；未配返 501，前端不卡死。见 `video-render/README.md` |
 
 > 本地跑 FastAPI 时同名变量放 `backend/.env`（参考 `backend/.env.example`），不要提交真实密钥。
+
+**配在 GPU worker 机上的变量**（不是 Cloudflare，放在 5060 那台机器，见 `video-render/README.md`）：
+
+| 变量 | 说明 |
+|---|---|
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | worker 逐镜配音用（预设 MiMo 音色）；缺了就静音兜底仍出片 |
+| `VOICE_CLONE_URL` | worker 调克隆音色服务（`voice=clone` 时）。同机一般填 `http://localhost:9233` |
+| `PEXELS_API_KEY` / `PIXABAY_API_KEY` | 可选：缺图自动空镜（autoStock），逗号分隔多 key。Pexels key 已实测通过 |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_PUBLIC_BASE` | 可选：成片传 Cloudflare R2 出分享链接；缺凭证降级为直接下载 |
 
 ---
 
@@ -68,30 +77,79 @@
 
 ---
 
-## 5. 进行中 🚧
+## 5. 视频渲染管线（已完成代码，正在部署）🚧
 
-- **视频渲染管线**（进行中）：选定 **HyperFrames**（HTML/CSS/JS + GSAP → 逐帧截图 + ffmpeg → MP4）为渲染内核，与克隆服务并列跑在同一台自有 GPU 机（RTX 5060，白天在线）。
-  - [x] **渲染地基**（本 PR）：新建 `video-render/`，含一套验证过风格的 9:16 竖屏样例模板（产品图 Ken Burns + 参数卡数字滚动 + 进度条 + 逐句字幕）+ `render.sh` 一键脚本 + README。结构借鉴 Pixelle-Video 的分层模板（背景层/渐变遮罩/内容层）。`lint`/`validate`/`render` 本机实测通过（8s·1080×1920 MP4）。**坑：HyperFrames 走确定性字体，默认不含中文 → Linux worker 需装 `fonts-noto-cjk` 或模板内嵌 Noto Sans SC，否则中文变方块。**
-  - [ ] Timeline JSON → 自动生成合成 HTML；接配音真实时长校准；`/api/render` 转发（`RENDER_URL`，与 `VOICE_CLONE_URL` 并列）；离线降级。
+选定 **HyperFrames**（HTML/CSS/JS + GSAP → 逐帧截图 + ffmpeg → MP4）为渲染内核，与克隆服务并列跑在同一台自有 GPU 机（RTX 5060，白天在线）。
+
+- [x] **渲染地基**（PR #18）：`video-render/` 9:16 竖屏样例模板（产品图 Ken Burns + 参数卡数字滚动 + 进度条 + 逐句字幕）+ `render.sh` + README。**坑：HyperFrames 走确定性字体，默认不含中文 → Linux worker 需装 `fonts-noto-cjk` 或模板内嵌 Noto Sans SC，否则中文变方块。**
+- [x] **Timeline JSON → 合成 HTML 自动生成**（PR #19）：`build.mjs` 每镜转一段 `.scene.clip`，数字+单位自动高亮，缺字段安全降级，确定性输出。
+- [x] **渲染 worker 一站式出片**（PR #20）：`worker.mjs` 收 Timeline+音色 → 逐镜配音、ffprobe 校准真实时长 → 生成 HTML → `hyperframes render` → ffmpeg 混音 → MP4。`/api/render` 转发（`RENDER_URL`），前端「渲染视频」按钮 + 离线降级。
+- [ ] **部署到 5060**（进行中）：Windows + WSL2(Ubuntu)。见第 7 节「在 5060 上部署 GPU 服务」。
 
 ---
 
-## 6. 待办 / 路线图 📋
+## 6. 五大功能（B/C/D/E/F，均已合并 main）✅
 
+> 这五个在「连夜自动开发」里完成，分别开 PR。最终经 PR #26 收口全部并入 `main`。
+
+- [x] **B 免费素材源**（PR #21）：`video-render/stock.mjs` + `functions/api/stock.js` + 后端 `/api/stock`。按关键词搜 Pexels/Pixabay 版权无忧素材（多 key 轮询），前端「素材库」面板搜图；渲染开 `autoStock` 时缺图分镜自动拉竖屏空镜（标「需替换」，实拍优先）。无 key 优雅降级。**Pexels key 已实测下载真实 JPEG 通过。**
+- [x] **C 防垃圾质检闸门**（PR #22）：`qualityGate()` 把留人分 + 事实溯源 + 反洗稿做成出片前置门槛，不达标弹窗拦截（可人工放行）。渲染画面加事实溯源角标（`visual.cite`→「据：…」）和素材角标。
+- [x] **D 横评对比矩阵**（PR #23）：`visual.compare = {products, rows:[{label,unit,better,values}]}` → 渲对比表，按 `better`(high/low) 逐维度判胜者金色高亮(✓)，综合胜者表头戴 👑。前端「横评对比」面板用简易 DSL 生成。
+- [x] **E R2 存片 + 分享链接**（PR #24）：`video-render/r2.mjs`（S3 兼容 PutObject + SigV4 自签，零依赖）。worker 出片后可选传 Cloudflare R2 → 返回可播/下载/复制分享的 URL；缺凭证或上传失败自动回退直接下载。配在 **worker 机** 上的 `R2_*` 变量。
+- [x] **F 多端裁剪**（PR #25）：`build.mjs` 支持 9:16/16:9/1:1 三画幅（含安全区适配）+ `buildXiaohongshuCaption()` 出小红书图文文案。worker 新增 `posterJob`/`POST /poster`（`hyperframes snapshot` 抽静帧出封面+配图，不出视频、不吃 GPU、快）+ `functions/api/poster.js` + 后端 `/api/poster`。前端画幅下拉 + 「图文/封面」按钮（封面/配图网格下载 + 可编辑小红书文案一键复制）。
+
+---
+
+## 7. 待办 / 路线图 📋
+
+- [ ] **完成 5060 部署**（当前任务）：起 worker(:9234) + 克隆音色(:9233)，用 Cloudflare Tunnel 暴露公网，在 Cloudflare Pages 配 `RENDER_URL`/`VOICE_CLONE_URL`。详见第 9 节。
+- [ ] **端到端实测**：部署好后用真实产品跑「生成→配音→渲染出 MP4」「图文/封面」全链路，验证中文字体、NVENC、R2 分享链接。
+- [ ] **数据可视化参数卡**（推荐，未做）：把真实参数（续航/重量/价格/跑分）渲成动画条形图/雷达图/进度环（ECharts/D3 + GSAP），最能体现「有用」。
+- [ ] **逐词字幕**：可选 `hyperframes transcribe`（内置 Whisper，替代单独 WhisperX）做卡拉OK字幕。
+- [ ] **三项目融合补强**：把 Pixelle 提炼/约束提示词进一步融进 MiMo；用 Pixelle storyboard 模型对齐 Timeline 字段。
 - [ ] **移动端适配 / 配色微调**（按需）。
-- [ ] **视频渲染管线后续**：Timeline→HyperFrames HTML 自动生成 → `render --gpu`（NVENC）→ R2 → 回链；逐词字幕用 `hyperframes transcribe`（内置 Whisper，替代单独 WhisperX 服务）。
-- [ ] **三项目融合复用**：② 移植 MoneyPrinterTurbo `material.py` 的 Pexels/Pixabay 免费素材源；③ 把 Pixelle 提炼/约束提示词融进 MiMo；④ 用 Pixelle storyboard 模型对齐 Timeline 字段。
-- [ ] **数据可视化参数卡 / 横评对比 / 防垃圾闸门（事实核查+反洗稿）/ 多端裁剪**。
 
 ---
 
-## 7. 换电脑后如何续上
+## 8. 换电脑后如何续上
 
 1. `git clone https://github.com/3Wsky/3c-review-video-studio.git`
-2. 看这份 `PROGRESS.md` 了解进度，从「进行中 🚧」接着做。
+2. 看这份 `PROGRESS.md`：第 4/6 节是已完成功能，第 7 节是待办（当前在「完成 5060 部署」）。
 3. 前端本地预览：仓库根目录 `python3 -m http.server 8099`，浏览器开 `http://localhost:8099/index.html`（本地没有密钥时走前端兜底示例数据，真实生成需用生产环境或配好密钥的后端）。
 4. 真实生成/知乎/TTS 的密钥已配在 Cloudflare（见第 3 节），生产站点 `https://3c-review-video-studio.pages.dev` 直接可用；改完推 PR 合并到 `main` 即自动部署。
 5. 想本地跑真实生成：`cd backend && cp .env.example .env`（填密钥）→ `pip install -r requirements.txt` → `uvicorn main:app --port 8000`。
+
+---
+
+## 9. 在 5060 上部署 GPU 服务（Windows + WSL2）
+
+> 这两个服务跑在你的 RTX 5060 台式机上（白天在线）。Windows 推荐用 WSL2(Ubuntu)，仓库脚本直接能用。
+
+**前置**：Windows 端装最新 NVIDIA 驱动 → PowerShell(管理员) `wsl --install -d Ubuntu` → 重启设用户名密码 → Ubuntu 里 `nvidia-smi` 能看到 5060（GPU 自动透传，WSL 内不用再装驱动）。
+
+**基础依赖（Ubuntu 里）**：
+```bash
+sudo apt update && sudo apt install -y git python3 python3-pip python3-venv ffmpeg fonts-noto-cjk curl
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs   # Node 22+
+git clone https://github.com/3Wsky/3c-review-video-studio.git && cd 3c-review-video-studio
+```
+
+**① 渲染 worker（快，先验证）**：
+```bash
+cd ~/3c-review-video-studio/video-render
+bash worker.start.sh        # :9234
+curl http://localhost:9234/health   # {"ok":true,...}
+```
+
+**② 克隆音色（要下模型，慢）**：
+```bash
+cd ~/3c-review-video-studio/voice-clone
+bash deploy.sh              # 装 cu128 PyTorch(5060必须) + 下 CosyVoice2-0.5B + 起 :9233
+curl http://localhost:9233/health   # modelLoaded:true, cuda:true
+```
+
+**③ 暴露公网 + 配主站点**：用 Cloudflare Tunnel（免费、不用公网 IP）把 :9233/:9234 暴露成 https 域名，再到 Cloudflare Pages → Settings → 环境变量 配 `VOICE_CLONE_URL` / `RENDER_URL`。
+（注：经 Cloudflare 转发的渲染若成片较长可能撞边缘超时，可把前端「后端地址」直指自部署 FastAPI `/api/render`(900s)，或后续改任务队列+轮询。）
 
 ---
 
