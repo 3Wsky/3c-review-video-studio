@@ -62,6 +62,64 @@ function resolveAsset(assetName, assetsDir) {
   return `assets/${files[0]}`;
 }
 
+// 解析数值（支持 "12 小时"/"3999元"/"210g" 抽出数字），失败返回 NaN。
+function toNumber(value) {
+  const m = /-?\d+(?:\.\d+)?/.exec(String(value == null ? "" : value));
+  return m ? Number(m[0]) : NaN;
+}
+
+// 归一化横评对比数据，并按 better(high/low) 算出每行胜者列下标（并列/无效 → -1）。
+function normalizeCompare(raw) {
+  if (!raw || !Array.isArray(raw.products) || !Array.isArray(raw.rows)) return null;
+  const products = raw.products.map((p) => String(p == null ? "" : p).trim()).filter(Boolean);
+  if (products.length < 2) return null;
+  const rows = raw.rows
+    .map((row) => {
+      const values = (Array.isArray(row?.values) ? row.values : []).slice(0, products.length);
+      const better = row?.better === "low" ? "low" : "high";
+      const nums = values.map(toNumber);
+      let winner = -1;
+      let bestVal = better === "low" ? Infinity : -Infinity;
+      let tie = false;
+      nums.forEach((n, idx) => {
+        if (!Number.isFinite(n)) return;
+        if ((better === "low" && n < bestVal) || (better === "high" && n > bestVal)) {
+          bestVal = n;
+          winner = idx;
+          tie = false;
+        } else if (n === bestVal) {
+          tie = true;
+        }
+      });
+      if (tie) winner = -1;
+      return {
+        label: String(row?.label || "").trim(),
+        unit: String(row?.unit || "").trim(),
+        better,
+        values: values.map((v) => String(v == null ? "" : v).trim()),
+        winner,
+      };
+    })
+    .filter((r) => r.label && r.values.length === products.length);
+  if (rows.length === 0) return null;
+  // 综合胜者：哪个产品拿下的「行胜者」最多
+  const tally = new Array(products.length).fill(0);
+  rows.forEach((r) => {
+    if (r.winner >= 0) tally[r.winner] += 1;
+  });
+  let pick = 0;
+  let pickTie = false;
+  tally.forEach((c, idx) => {
+    if (c > tally[pick]) {
+      pick = idx;
+      pickTie = false;
+    } else if (idx !== pick && c === tally[pick]) {
+      pickTie = true;
+    }
+  });
+  return { products, rows, verdict: pickTie ? -1 : pick, tally };
+}
+
 // ---------- 核心：构造每镜数据 ----------
 
 function normalizeScenes(timeline, assetsDir) {
@@ -89,11 +147,41 @@ function normalizeScenes(timeline, assetsDir) {
       cite: String(visual.cite || scene?.cite || "").trim(),
       // 素材标记：自动空镜（B 的 autoStock）拉的图标「示意·需替换」，尊重实拍优先。
       stock: visual.assetSource === "stock",
+      // 横评对比：visual.compare / scene.compare → 渲染对比矩阵（胜者高亮）。
+      compare: normalizeCompare(visual.compare || scene?.compare),
     };
   });
 }
 
 // ---------- HTML 片段 ----------
+
+// 横评对比矩阵：表头（产品名，综合胜者带皇冠高亮）+ 每行一个维度（胜者格金色）。
+function compareMarkup(s) {
+  const c = s.compare;
+  const cols = c.products.length;
+  const headCells = c.products
+    .map((p, i) => {
+      const win = i === c.verdict;
+      return `<div class="cmp-cell cmp-head${win ? " cmp-pick" : ""}">${win ? "👑 " : ""}${escapeHtml(p)}</div>`;
+    })
+    .join("");
+  const rowsHtml = c.rows
+    .map((row, r) => {
+      const label = row.unit ? `${row.label}<small>（${escapeHtml(row.unit)}）</small>` : escapeHtml(row.label);
+      const cells = row.values
+        .map((v, i) => {
+          const win = i === row.winner;
+          return `<div class="cmp-cell cmp-val${win ? " cmp-win" : ""}">${escapeHtml(v)}${win ? '<i class="cmp-tick">✓</i>' : ""}</div>`;
+        })
+        .join("");
+      return `<div id="${s.id}-cmp-r${r}" class="cmp-row" style="grid-template-columns: 1.25fr repeat(${cols}, 1fr)"><div class="cmp-cell cmp-label">${label}</div>${cells}</div>`;
+    })
+    .join("\n          ");
+  return `<div id="${s.id}-cmp" class="compare">
+          <div class="cmp-row cmp-headrow" style="grid-template-columns: 1.25fr repeat(${cols}, 1fr)"><div class="cmp-cell cmp-corner">对比</div>${headCells}</div>
+          ${rowsHtml}
+        </div>`;
+}
 
 function sceneMarkup(s) {
   const bg = s.asset
@@ -101,9 +189,13 @@ function sceneMarkup(s) {
     : `<div class="bg-layer bg-fallback"></div>`;
   const badge = s.badge ? `<div id="${s.id}-badge" class="badge">${escapeHtml(s.badge)}</div>` : "";
   const headline = s.headline
-    ? `<div id="${s.id}-title" class="title">${escapeHtml(s.headline)}</div>`
+    ? `<div id="${s.id}-title" class="title${s.compare ? " title-compact" : ""}">${escapeHtml(s.headline)}</div>`
     : "";
-  const detail = s.detail ? `<div id="${s.id}-detail" class="detail">${escapeHtml(s.detail)}</div>` : "";
+  // 对比镜用矩阵取代中部 detail，避免重叠。
+  const detail = !s.compare && s.detail
+    ? `<div id="${s.id}-detail" class="detail">${escapeHtml(s.detail)}</div>`
+    : "";
+  const compare = s.compare ? compareMarkup(s) : "";
   const subtitle = s.subtitle
     ? `<div id="${s.id}-sub" class="subtitle">${highlightNumbers(s.subtitle)}</div>`
     : "";
@@ -126,6 +218,7 @@ function sceneMarkup(s) {
           ${badge}
           ${headline}
           ${detail}
+          ${compare}
           ${subtitle}
           ${cite}
           ${stockTag}
@@ -152,7 +245,7 @@ function sceneTimeline(s) {
       `      tl.from("#${s.id}-title", { autoAlpha: 0, y: 44, duration: 0.7, ease: "power3.out" }, ${round(t + 0.25)});`,
     );
   }
-  if (s.detail) {
+  if (s.detail && !s.compare) {
     lines.push(
       `      tl.from("#${s.id}-detail", { autoAlpha: 0, y: 26, duration: 0.6, ease: "power2.out" }, ${round(t + 0.45)});`,
     );
@@ -161,6 +254,26 @@ function sceneTimeline(s) {
     lines.push(
       `      tl.from("#${s.id}-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, ${round(t + 0.55)});`,
     );
+  }
+  if (s.compare) {
+    // 表头先出，随后各维度行自上而下逐行滑入，胜者格在出现后回弹强调。
+    lines.push(
+      `      tl.from("#${s.id}-cmp .cmp-headrow", { autoAlpha: 0, y: -24, duration: 0.5, ease: "power2.out" }, ${round(t + 0.3)});`,
+    );
+    s.compare.rows.forEach((_, r) => {
+      lines.push(
+        `      tl.from("#${s.id}-cmp-r${r}", { autoAlpha: 0, x: -40, duration: 0.45, ease: "power2.out" }, ${round(t + 0.55 + r * 0.22)});`,
+      );
+    });
+    const after = round(t + 0.7 + s.compare.rows.length * 0.22);
+    lines.push(
+      `      tl.fromTo("#${s.id}-cmp .cmp-win", { scale: 1 }, { scale: 1.12, duration: 0.28, yoyo: true, repeat: 1, ease: "power1.inOut" }, ${after});`,
+    );
+    if (s.compare.verdict >= 0) {
+      lines.push(
+        `      tl.fromTo("#${s.id}-cmp .cmp-pick", { scale: 1 }, { scale: 1.08, duration: 0.32, yoyo: true, repeat: 1, ease: "power1.inOut" }, ${round(after + 0.2)});`,
+      );
+    }
   }
   if (s.cite) {
     lines.push(
@@ -267,6 +380,41 @@ export function buildHtml(timeline, opts = {}) {
         color: #ffd9a8; padding: 6px 16px; border-radius: 999px;
         background: rgba(180,110,40,0.28);
         border: 1px solid rgba(255,190,120,0.5);
+      }
+      .title-compact { top: 150px; font-size: 70px; }
+      .compare {
+        position: absolute; top: 340px; left: 56px; right: 56px;
+        display: flex; flex-direction: column; gap: 12px;
+      }
+      .cmp-row {
+        display: grid; gap: 12px; align-items: stretch;
+      }
+      .cmp-cell {
+        display: flex; align-items: center; justify-content: center;
+        padding: 22px 12px; border-radius: 14px;
+        font-size: 38px; font-weight: 600; text-align: center;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.10);
+        min-height: 92px; line-height: 1.2;
+      }
+      .cmp-headrow .cmp-cell { font-size: 40px; font-weight: 800; padding: 20px 10px; }
+      .cmp-corner { color: #aeb6cf; background: rgba(255,255,255,0.03); }
+      .cmp-head { color: #dbe3ff; background: rgba(88,110,255,0.20); border-color: rgba(140,160,255,0.45); }
+      .cmp-pick { color: #fff; background: rgba(255,190,80,0.28); border-color: rgba(255,205,120,0.85); }
+      .cmp-label {
+        justify-content: flex-start; text-align: left;
+        font-size: 34px; font-weight: 600; color: #c6cfe6;
+        background: transparent; border-color: transparent; padding-left: 6px;
+      }
+      .cmp-label small { font-size: 24px; color: #8d97b4; font-weight: 500; }
+      .cmp-val { color: #eef0f6; }
+      .cmp-win {
+        color: #20231a; background: #ffd166; border-color: #ffd166;
+        font-weight: 800; position: relative;
+      }
+      .cmp-tick {
+        position: absolute; top: 6px; right: 12px;
+        font-size: 24px; font-style: normal; color: #1a3a1a;
       }
     </style>
   </head>

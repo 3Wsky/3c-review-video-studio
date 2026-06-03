@@ -783,14 +783,22 @@ async def render(data: RenderInput):
         )
 
     content_type = response.headers.get("content-type", "")
-    if response.status_code >= 400 or "application/json" in content_type:
+    # worker 返回 JSON：配了 R2 时是 {ok,url}（透传给前端可播/下载/分享）；否则是出错。
+    if "application/json" in content_type:
         try:
-            err = response.json()
+            body = response.json()
         except ValueError:
-            err = {"error": "渲染服务返回异常", "providerStatus": response.status_code}
+            body = {"error": "渲染服务返回异常", "providerStatus": response.status_code}
+        if response.status_code < 400 and body.get("ok") and body.get("url"):
+            return JSONResponse(body, status_code=200)
         return JSONResponse(
-            {"error": err.get("error") or "渲染失败", "providerStatus": response.status_code},
+            {"error": body.get("error") or "渲染失败", "providerStatus": response.status_code},
             status_code=response.status_code if response.status_code >= 400 else 502,
+        )
+    if response.status_code >= 400:
+        return JSONResponse(
+            {"error": "渲染失败", "providerStatus": response.status_code},
+            status_code=response.status_code,
         )
 
     return Response(

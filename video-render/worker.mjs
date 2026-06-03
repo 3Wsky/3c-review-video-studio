@@ -31,6 +31,7 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHtml } from "./build.mjs";
 import { keysFromEnv, pickStockPhotoUrl } from "./stock.mjs";
+import { r2ConfigFromEnv, uploadToR2 } from "./r2.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 9234);
@@ -262,6 +263,17 @@ function estimateByText(text) {
   return Math.max(MIN_SCENE, round(chars / 4.5 + 0.6));
 }
 
+// R2 object key 用的安全文件名（保留中英文数字，其余转 -）。
+function safeFileBase(title) {
+  const t = String(title || "3c-review").trim().replace(/[^\w\u4e00-\u9fa5.-]+/g, "-").replace(/^-+|-+$/g, "");
+  return (t || "3c-review").slice(0, 48);
+}
+// renders/<时间戳>-<随机> 前缀，避免重名覆盖。
+function dateKey() {
+  const d = new Date().toISOString().replace(/[:T]/g, "-").replace(/\..+/, "");
+  return `${d}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 // ---------- HTTP 服务 ----------
 
 function sendJson(res, status, body) {
@@ -296,6 +308,7 @@ const server = createServer(async (req, res) => {
       hasLLM: Boolean(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY),
       hasClone: Boolean((process.env.VOICE_CLONE_URL || "").trim()),
       hasStock: Boolean(keysFromEnv(process.env.PEXELS_API_KEY).length || keysFromEnv(process.env.PIXABAY_API_KEY).length),
+      hasR2: Boolean(r2ConfigFromEnv()),
       hyperframes: HF,
     });
   }
@@ -309,6 +322,28 @@ const server = createServer(async (req, res) => {
         console.log(`[render] ${m}`);
       };
       const mp4 = await renderJob(input, log);
+
+      // 配了 R2 凭证就上传，返回可分享 URL（JSON）；否则/失败则直接回传 MP4 二进制（老路）。
+      const r2cfg = r2ConfigFromEnv();
+      if (r2cfg) {
+        try {
+          const base = safeFileBase(input?.timeline?.project?.title);
+          const key = `renders/${dateKey()}-${base}.mp4`;
+          const uploaded = await uploadToR2(mp4, key, "video/mp4", r2cfg);
+          log(`R2 上传成功：${uploaded.url}${uploaded.public ? "" : "（私有 bucket，需配 R2_PUBLIC_BASE 才能公网播放）"}`);
+          return sendJson(res, 200, {
+            ok: true,
+            url: uploaded.url,
+            key: uploaded.key,
+            public: uploaded.public,
+            bytes: mp4.length,
+            logs,
+          });
+        } catch (e) {
+          log(`R2 上传失败，回退为直接下载：${e.message}`);
+        }
+      }
+
       res.writeHead(200, {
         "content-type": "video/mp4",
         "content-length": mp4.length,
