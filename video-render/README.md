@@ -53,6 +53,8 @@ bash render.sh            # 再渲成 MP4
 - 每个 `timeline[i]` → 一段 `.scene.clip`：背景层（`visual.asset` 命中 `assets/` 里的图就用，
   否则纯渐变背景）+ 渐变遮罩 + 标题(`visual.headline`)/副标题(`visual.detail`)/字幕(`subtitle`∨`voiceover`)。
 - 动画数据驱动：产品图 Ken Burns、标题/字幕逐镜淡入；字幕里的「数字+单位」（如 `12 小时`/`20%`）自动高亮。
+- **事实溯源角标**：`visual.cite`（或 `scene.cite`，如「实测」「官方规格」）→ 画面左下角渲一条「据：…」出处角标。
+- **素材标记**：`visual.assetSource === "stock"`（B 的 autoStock 自动空镜）→ 右上角标「素材·示意（待替换）」，提醒实拍优先。
 - **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕。
 - **确定性**：不用 `Date.now()`/`Math.random()`，相同输入产出相同 HTML（符合 HyperFrames 渲染要求）。
 - `index.html` 顶部标了「由 build.mjs 自动生成，请勿手改」——要改样式/动画请改 `build.mjs`。
@@ -71,13 +73,15 @@ cd video-render
 export OPENAI_API_KEY=...          # MiMo/OpenAI 兼容 key（逐镜配音；缺了就静音兜底）
 export OPENAI_BASE_URL=...          # 默认 https://api.openai.com/v1
 export VOICE_CLONE_URL=...          # 可选：克隆音色服务（voice=clone 时用）
+export PEXELS_API_KEY=...           # 可选：缺图自动空镜（autoStock），逗号分隔多 key
+export PIXABAY_API_KEY=...          # 可选：同上，另一个免费源
 bash worker.start.sh               # 默认听 :9234
 ```
 
 接口：
-- `GET /health` → `{ ok, hasLLM, hasClone, hyperframes }`，用于探活。
-- `POST /render`，请求体 `{ timeline, voice, cloneSpkId?, gpu?, assets? }`，成功返回 `video/mp4` 二进制，
-  出错返回 JSON `{ error }`。
+- `GET /health` → `{ ok, hasLLM, hasClone, hasStock, hyperframes }`，用于探活。
+- `POST /render`，请求体 `{ timeline, voice, cloneSpkId?, gpu?, assets?, autoStock? }`，成功返回 `video/mp4` 二进制，
+  出错返回 JSON `{ error }`。`autoStock:true` 且配了 PEXELS/PIXABAY key 时，缺图分镜会自动拉一张免费空镜（标记「需替换」）。
 
 出片流程（每个请求在临时目录里独立完成）：
 1. 逐镜调 TTS/克隆服务合成音频；拿不到（无 key / 克隆离线）则用静音兜底，仍能出片。
@@ -85,6 +89,10 @@ bash worker.start.sh               # 默认听 :9234
 3. `buildHtml()` 生成合成 HTML。
 4. `hyperframes render`（带 `gpu:true` 则 `--gpu` 走 NVENC）→ 无声视频。
 5. ffmpeg 把逐镜音频按时长拼成声轨并混入 → 最终 MP4。
+
+> 缺图自动空镜（可选）：`autoStock:true` 时，没有 `visual.asset` 的分镜会按关键词
+> （`visual.stockQuery`/`headline`/标题/产品+品类）从 Pexels/Pixabay 拉一张竖屏图下载进合成。
+> 尊重实拍优先：已有素材不覆盖，自动拉的标 `assetSource:"stock"`。
 
 主站点配置：在后端设 `RENDER_URL=https://your-gpu-host:9234`（与 `VOICE_CLONE_URL` 并列）。
 未配置返 501、连不上返 502，前端都会给明确提示不卡死。

@@ -98,6 +98,27 @@
             </div>
           </details>
 
+          <details class="voice-clone" id="stockBox">
+            <summary>
+              <i data-lucide="image"></i>
+              素材库 · 免费空镜（Pexels/Pixabay，版权无忧可商用）
+            </summary>
+            <div class="voice-clone-body">
+              <div class="stock-search">
+                <input id="stockQuery" type="text" placeholder="搜索关键词，如 smartphone / headphone / desk setup" />
+                <button class="icon-button" id="stockSearchBtn" type="button">
+                  <i data-lucide="search"></i><span>搜索</span>
+                </button>
+              </div>
+              <div class="stock-grid" id="stockGrid"></div>
+              <p class="asset-tip" id="stockTip">搜免费可商用素材做空镜。点缩略图可在新标签查看出处。需在后端配置 PEXELS_API_KEY / PIXABAY_API_KEY（见 backend/.env.example）。</p>
+              <label class="checkbox-row">
+                <input id="autoStockToggle" type="checkbox" />
+                <span>渲染时：分镜缺图则自动用免费素材空镜兜底（标记「需替换」，实拍优先）</span>
+              </label>
+            </div>
+          </details>
+
           <div class="segmented" role="group" aria-label="真人出镜布局">
             <button class="segment active" data-layout="center" type="button">真人居中</button>
             <button class="segment" data-layout="left" type="button">真人左侧</button>
@@ -142,6 +163,9 @@
             </button>
             <button class="icon-button checkup-btn" id="checkupBtn" type="button" title="给脚本打留人分，标出弱钩子/拖节奏并给建议">
               <i data-lucide="stethoscope"></i><span>留人体检</span>
+            </button>
+            <button class="icon-button gate-btn" id="gateBtn" type="button" title="出片前质检：留人分 + 事实溯源 + 反洗稿，不达标会拦下">
+              <i data-lucide="shield-check"></i><span>质检闸门</span>
             </button>
             <button class="icon-button" id="copyPromptBtn" type="button" title="复制 3C Prompt">
               <i data-lucide="clipboard-copy"></i><span>Prompt</span>

@@ -30,6 +30,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHtml } from "./build.mjs";
+import { keysFromEnv, pickStockPhotoUrl } from "./stock.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 9234);
@@ -123,7 +124,48 @@ async function fitToDuration(src, dst, seconds) {
 
 // ---------- 渲染主流程 ----------
 
-async function renderJob({ timeline, voice, cloneSpkId, gpu, assets }, log) {
+// 缺图自动空镜：给没有 asset 的分镜从免费素材源（Pexels/Pixabay）拉一张图，下载到 assetsDir。
+async function fillStockAssets(scenes, assetsDir, timeline, log) {
+  const pexelsKeys = keysFromEnv(process.env.PEXELS_API_KEY);
+  const pixabayKeys = keysFromEnv(process.env.PIXABAY_API_KEY);
+  if (pexelsKeys.length === 0 && pixabayKeys.length === 0) {
+    log("autoStock：未配置 PEXELS_API_KEY/PIXABAY_API_KEY，跳过自动空镜");
+    return;
+  }
+  const product = String(timeline?.project?.product || "").trim();
+  const category = String(timeline?.project?.category || "").trim();
+  for (let i = 0; i < scenes.length; i++) {
+    const s = scenes[i];
+    const visual = s.visual || (s.visual = {});
+    if (String(visual.asset || "").trim()) continue; // 已有素材，不覆盖
+    const query =
+      String(visual.stockQuery || visual.query || visual.headline || s.title || "").trim() ||
+      [product, category].filter(Boolean).join(" ") ||
+      "technology gadget";
+    try {
+      const url = await pickStockPhotoUrl(query, { pexelsKeys, pixabayKeys, orientation: "portrait" });
+      if (!url) {
+        log(`镜 ${i + 1} autoStock：「${query}」无结果`);
+        continue;
+      }
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const buf = Buffer.from(await resp.arrayBuffer());
+      const m = /\.(png|webp|jpe?g)(\?|$)/i.exec(url);
+      let ext = m && m[1] ? m[1].toLowerCase() : "jpg";
+      if (ext === "jpeg") ext = "jpg";
+      const name = `stock-${i}.${ext}`;
+      await writeFile(join(assetsDir, name), buf);
+      visual.asset = name;
+      visual.assetSource = "stock"; // 标记「素材源/需替换」，尊重实拍优先
+      log(`镜 ${i + 1} autoStock：「${query}」→ ${name}（${(buf.length / 1024).toFixed(0)}KB）`);
+    } catch (e) {
+      log(`镜 ${i + 1} autoStock 失败：${e.message}`);
+    }
+  }
+}
+
+async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock }, log) {
   const scenes = Array.isArray(timeline?.timeline) ? timeline.timeline : [];
   if (scenes.length === 0) throw new Error("Timeline 为空：timeline[] 没有分镜");
 
@@ -173,6 +215,9 @@ async function renderJob({ timeline, voice, cloneSpkId, gpu, assets }, log) {
     s.duration = sceneDur; // 写回，供 build.mjs 平铺
     log(`镜 ${i + 1}/${scenes.length}：${b64 ? `配音 ${dur.toFixed(2)}s` : "静音"} → 时长 ${sceneDur}s`);
   }
+
+  // 2.5) 缺图自动空镜（可选，需 PEXELS/PIXABAY key）
+  if (autoStock) await fillStockAssets(scenes, assetsDir, timeline, log);
 
   // 3) 生成合成 HTML
   const html = buildHtml(timeline, { assetsDir });
@@ -250,6 +295,7 @@ const server = createServer(async (req, res) => {
       service: "render-worker",
       hasLLM: Boolean(process.env.OPENAI_API_KEY || process.env.LLM_API_KEY),
       hasClone: Boolean((process.env.VOICE_CLONE_URL || "").trim()),
+      hasStock: Boolean(keysFromEnv(process.env.PEXELS_API_KEY).length || keysFromEnv(process.env.PIXABAY_API_KEY).length),
       hyperframes: HF,
     });
   }

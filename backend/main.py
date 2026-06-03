@@ -71,6 +71,7 @@ class RenderInput(BaseModel):
     cloneSpkId: str | None = None
     gpu: bool | None = True
     assets: dict | None = None
+    autoStock: bool | None = False
 
 
 class RewriteSceneInput(BaseModel):
@@ -339,6 +340,8 @@ async def health():
         "model": model,
         "hasZhihu": has_zhihu,
         "hasVoiceClone": bool(_voice_clone_url()),
+        "hasRender": bool(_render_url()),
+        "hasStock": bool(_stock_keys("PEXELS_API_KEY") or _stock_keys("PIXABAY_API_KEY")),
     }
 
 
@@ -627,6 +630,124 @@ def _render_url() -> str:
     return (os.environ.get("RENDER_URL") or "").strip().rstrip("/")
 
 
+def _stock_keys(name: str) -> list[str]:
+    raw = os.environ.get(name) or ""
+    return [k.strip() for k in re.split(r"[,\s]+", raw) if k.strip()]
+
+
+_STOCK_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+)
+
+
+def _pexels_orientation(o: str) -> str:
+    return o if o in ("landscape", "square", "portrait") else "portrait"
+
+
+async def _search_pexels_photos(client, query, orientation, per_page, key):
+    resp = await client.get(
+        "https://api.pexels.com/v1/search",
+        params={"query": query, "per_page": per_page, "orientation": _pexels_orientation(orientation)},
+        headers={"Authorization": key, "User-Agent": _STOCK_UA},
+    )
+    data = resp.json()
+    out = []
+    for p in data.get("photos", []) or []:
+        src = p.get("src") or {}
+        out.append({
+            "provider": "pexels", "type": "photo", "id": str(p.get("id")),
+            "thumb": src.get("medium") or src.get("small") or "",
+            "url": src.get("large2x") or src.get("large") or src.get("original") or "",
+            "width": p.get("width"), "height": p.get("height"),
+            "author": p.get("photographer") or "", "sourceUrl": p.get("url") or "",
+            "alt": p.get("alt") or "",
+        })
+    return out
+
+
+async def _search_pexels_videos(client, query, orientation, per_page, key):
+    resp = await client.get(
+        "https://api.pexels.com/videos/search",
+        params={"query": query, "per_page": per_page, "orientation": _pexels_orientation(orientation)},
+        headers={"Authorization": key, "User-Agent": _STOCK_UA},
+    )
+    data = resp.json()
+    out = []
+    for v in data.get("videos", []) or []:
+        files = [f for f in (v.get("video_files") or []) if "mp4" in (f.get("file_type") or "")]
+        files.sort(key=lambda f: f.get("height") or 0, reverse=True)
+        best = files[0] if files else {}
+        out.append({
+            "provider": "pexels", "type": "video", "id": str(v.get("id")),
+            "thumb": v.get("image") or "", "url": best.get("link") or "",
+            "width": best.get("width") or v.get("width"), "height": best.get("height") or v.get("height"),
+            "duration": v.get("duration"), "author": (v.get("user") or {}).get("name") or "",
+            "sourceUrl": v.get("url") or "",
+        })
+    return out
+
+
+async def _search_pixabay_photos(client, query, orientation, per_page, key):
+    resp = await client.get(
+        "https://pixabay.com/api/",
+        params={
+            "key": key, "q": query, "image_type": "photo",
+            "orientation": "horizontal" if orientation == "landscape" else "vertical",
+            "per_page": max(3, per_page), "safesearch": "true",
+        },
+        headers={"User-Agent": _STOCK_UA},
+    )
+    data = resp.json()
+    out = []
+    for h in data.get("hits", []) or []:
+        out.append({
+            "provider": "pixabay", "type": "photo", "id": str(h.get("id")),
+            "thumb": h.get("previewURL") or h.get("webformatURL") or "",
+            "url": h.get("largeImageURL") or h.get("webformatURL") or "",
+            "width": h.get("imageWidth"), "height": h.get("imageHeight"),
+            "author": h.get("user") or "", "sourceUrl": h.get("pageURL") or "",
+            "alt": h.get("tags") or "",
+        })
+    return out
+
+
+@app.get("/api/stock")
+async def stock(query: str = "", q: str = "", type: str = "photo", orientation: str = "portrait", perPage: int = 15):
+    """免费素材源（Pexels/Pixabay）搜索：按关键词搜版权无忧、可商用的图/视频。未配置 key → 501。"""
+    term = (query or q or "").strip()
+    if not term:
+        return JSONResponse({"error": "缺少搜索关键词 query"}, status_code=400)
+    pexels_keys = _stock_keys("PEXELS_API_KEY")
+    pixabay_keys = _stock_keys("PIXABAY_API_KEY")
+    if not pexels_keys and not pixabay_keys:
+        return JSONResponse(
+            {"error": "素材源未配置：请设置环境变量 PEXELS_API_KEY（免费 https://www.pexels.com/api/）或 PIXABAY_API_KEY。"},
+            status_code=501,
+        )
+    per_page = max(1, min(40, int(perPage or 15)))
+    items: list[dict] = []
+    providers: list[str] = []
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            if pexels_keys:
+                providers.append("pexels")
+                fn = _search_pexels_videos if type == "video" else _search_pexels_photos
+                try:
+                    items += await fn(client, term, orientation, per_page, pexels_keys[0])
+                except (httpx.HTTPError, ValueError):
+                    pass
+            if pixabay_keys and type != "video":
+                providers.append("pixabay")
+                try:
+                    items += await _search_pixabay_photos(client, term, orientation, per_page, pixabay_keys[0])
+                except (httpx.HTTPError, ValueError):
+                    pass
+    except httpx.HTTPError as error:
+        return JSONResponse({"error": f"素材搜索失败：{error}"}, status_code=502)
+    return {"query": term, "type": type, "orientation": orientation, "providers": providers, "count": len(items), "items": items}
+
+
 @app.post("/api/render")
 async def render(data: RenderInput):
     """把渲染请求转发到自部署的渲染 worker（RENDER_URL）。worker 一站式出片，返回 MP4。"""
@@ -648,6 +769,7 @@ async def render(data: RenderInput):
         "voice": data.voice or "mimo_default",
         "cloneSpkId": data.cloneSpkId or "",
         "gpu": data.gpu if data.gpu is not None else True,
+        "autoStock": bool(data.autoStock),
     }
     if data.assets:
         payload["assets"] = data.assets

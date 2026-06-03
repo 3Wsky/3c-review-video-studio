@@ -463,6 +463,70 @@ textarea:focus {
   background: #000;
 }
 
+.stock-search {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stock-search input {
+  flex: 1;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: inherit;
+}
+
+.stock-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+
+.stock-cell {
+  position: relative;
+  display: block;
+  aspect-ratio: 9 / 16;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--soft);
+}
+
+.stock-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.stock-cell-tag {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.checkbox-row input {
+  margin-top: 2px;
+}
+
 .square-button {
   width: 36px;
   padding: 0;
@@ -1702,4 +1766,65 @@ textarea:focus {
 @media (max-width: 620px) {
   .ck-overall { grid-template-columns: 1fr; justify-items: center; }
   .ck-dims { width: 100%; }
+}
+
+/* ---- 质检闸门 ---- */
+.gate-verdict {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 15px;
+}
+.gate-verdict svg { width: 22px; height: 22px; }
+
+.gate-check {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--soft);
+}
+.gate-check.gate-fail { border-color: color-mix(in srgb, var(--red) 55%, var(--line)); }
+.gate-check.gate-warn { border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
+
+.gate-check-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gate-check-head svg { width: 18px; height: 18px; }
+.gate-check-label { font-weight: 650; font-size: 14px; }
+.gate-check-tag {
+  margin-left: auto;
+  font-size: 11.5px;
+  padding: 1px 9px;
+  border: 1px solid;
+  border-radius: 999px;
+}
+.gate-check-summary {
+  margin: 7px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.45;
+}
+.gate-detail {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.gate-foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+}
+.gate-proceed {
+  border-color: color-mix(in srgb, var(--amber) 50%, var(--line));
+  color: var(--amber);
 }

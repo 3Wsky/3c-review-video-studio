@@ -85,6 +85,10 @@ function normalizeScenes(timeline, assetsDir) {
       detail: String(visual.detail || "").trim(),
       subtitle: String(scene?.subtitle || scene?.voiceover || "").trim(),
       asset: resolveAsset(visual.asset, assetsDir),
+      // 事实溯源角标：visual.cite / scene.cite（如「据 官方规格」「实测」）。
+      cite: String(visual.cite || scene?.cite || "").trim(),
+      // 素材标记：自动空镜（B 的 autoStock）拉的图标「示意·需替换」，尊重实拍优先。
+      stock: visual.assetSource === "stock",
     };
   });
 }
@@ -103,6 +107,12 @@ function sceneMarkup(s) {
   const subtitle = s.subtitle
     ? `<div id="${s.id}-sub" class="subtitle">${highlightNumbers(s.subtitle)}</div>`
     : "";
+  const cite = s.cite
+    ? `<div id="${s.id}-cite" class="cite">据：${escapeHtml(s.cite)}</div>`
+    : "";
+  const stockTag = s.stock
+    ? `<div id="${s.id}-stock" class="stock-tag">素材·示意（待替换）</div>`
+    : "";
   return `      <section
         id="${s.id}"
         class="scene clip"
@@ -117,6 +127,8 @@ function sceneMarkup(s) {
           ${headline}
           ${detail}
           ${subtitle}
+          ${cite}
+          ${stockTag}
         </div>
       </section>`;
 }
@@ -148,6 +160,16 @@ function sceneTimeline(s) {
   if (s.subtitle) {
     lines.push(
       `      tl.from("#${s.id}-sub", { autoAlpha: 0, y: 20, duration: 0.5, ease: "power2.out" }, ${round(t + 0.55)});`,
+    );
+  }
+  if (s.cite) {
+    lines.push(
+      `      tl.from("#${s.id}-cite", { autoAlpha: 0, duration: 0.5, ease: "power1.out" }, ${round(t + 0.7)});`,
+    );
+  }
+  if (s.stock) {
+    lines.push(
+      `      tl.from("#${s.id}-stock", { autoAlpha: 0, duration: 0.5, ease: "power1.out" }, ${round(t + 0.4)});`,
     );
   }
   return lines.join("\n");
@@ -231,6 +253,21 @@ export function buildHtml(timeline, opts = {}) {
         text-shadow: 0 3px 12px rgba(0,0,0,0.7);
       }
       .subtitle .hl { color: #ffd166; }
+      .cite {
+        position: absolute; left: 80px; bottom: 96px;
+        font-size: 26px; font-weight: 500; letter-spacing: 0.5px;
+        color: rgba(220,228,245,0.78);
+        padding: 6px 16px; border-radius: 8px;
+        background: rgba(8,10,16,0.42);
+        border-left: 4px solid rgba(140,160,255,0.7);
+      }
+      .stock-tag {
+        position: absolute; top: 40px; right: 40px;
+        font-size: 24px; font-weight: 500;
+        color: #ffd9a8; padding: 6px 16px; border-radius: 999px;
+        background: rgba(180,110,40,0.28);
+        border: 1px solid rgba(255,190,120,0.5);
+      }
     </style>
   </head>
   <body>

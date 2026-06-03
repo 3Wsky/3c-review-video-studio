@@ -64,6 +64,7 @@ const els = {
   regenerateBtn: document.querySelector("#regenerateBtn"),
   addSceneBtn: document.querySelector("#addSceneBtn"),
   checkupBtn: document.querySelector("#checkupBtn"),
+  gateBtn: document.querySelector("#gateBtn"),
   resetBtn: document.querySelector("#resetBtn"),
   advToggle: document.querySelector("#advToggle"),
   advPanel: document.querySelector("#advPanel"),
@@ -77,6 +78,11 @@ const els = {
   exportSrtBtn: document.querySelector("#exportSrtBtn"),
   exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
   renderVideoBtn: document.querySelector("#renderVideoBtn"),
+  stockQuery: document.querySelector("#stockQuery"),
+  stockSearchBtn: document.querySelector("#stockSearchBtn"),
+  stockGrid: document.querySelector("#stockGrid"),
+  stockTip: document.querySelector("#stockTip"),
+  autoStockToggle: document.querySelector("#autoStockToggle"),
   track: document.querySelector("#track"),
   trackRuler: document.querySelector("#trackRuler"),
   clipEditor: document.querySelector("#clipEditor"),
@@ -1372,6 +1378,16 @@ async function renderVideo() {
     return;
   }
 
+  // 防垃圾质检闸门：留人分 + 事实溯源 + 反洗稿。不达标先拦下，可人工放行。
+  const report = qualityGate(data);
+  if (!report.pass) {
+    openGate(report, () => performRender(data, apiBase, voice));
+    return;
+  }
+  await performRender(data, apiBase, voice);
+}
+
+async function performRender(data, apiBase, voice) {
   if (lastRenderUrl) {
     URL.revokeObjectURL(lastRenderUrl);
     lastRenderUrl = "";
@@ -1381,6 +1397,7 @@ async function renderVideo() {
 
   const body = { timeline: data, voice };
   if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
+  if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
 
   try {
     const response = await fetch(`${apiBase}/api/render`, {
@@ -1442,6 +1459,68 @@ function showRenderPreview(url) {
   host.appendChild(title);
   host.appendChild(video);
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---- 素材库：搜免费可商用空镜（Pexels/Pixabay）---- */
+function setStockTip(text) {
+  if (els.stockTip) els.stockTip.textContent = text;
+}
+
+async function searchStock() {
+  const query = (els.stockQuery && els.stockQuery.value.trim()) || "";
+  if (!query) {
+    setStockTip("先输入搜索关键词（建议用英文，如 smartphone、headphone）。");
+    return;
+  }
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setStockTip("素材搜索需要部署后端（本地 file:// 无法调用）。");
+    return;
+  }
+  if (els.stockGrid) els.stockGrid.innerHTML = "";
+  setStockTip("搜索中…");
+  try {
+    const url = `${apiBase}/api/stock?query=${encodeURIComponent(query)}&type=photo&orientation=portrait&perPage=15`;
+    const response = await fetch(url);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setStockTip(data.error || "素材搜索失败，请稍后再试。");
+      return;
+    }
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) {
+      setStockTip(`「${query}」没搜到素材，换个关键词试试（英文命中率更高）。`);
+      return;
+    }
+    renderStockGrid(items);
+    setStockTip(`找到 ${items.length} 条（来源：${(data.providers || []).join(" / ") || "—"}）。点缩略图看出处；勾选下方「自动空镜」让渲染缺图时自动用。`);
+  } catch (error) {
+    setStockTip(`素材搜索失败：${error.message || error}`);
+  }
+}
+
+function renderStockGrid(items) {
+  if (!els.stockGrid) return;
+  els.stockGrid.innerHTML = "";
+  items.forEach((it) => {
+    if (!it.thumb) return;
+    const fig = document.createElement("a");
+    fig.className = "stock-cell";
+    fig.href = it.sourceUrl || it.url || "#";
+    fig.target = "_blank";
+    fig.rel = "noopener noreferrer";
+    fig.title = `${it.provider} · ${it.author || ""}`.trim();
+    const img = document.createElement("img");
+    img.src = it.thumb;
+    img.alt = it.alt || "";
+    img.loading = "lazy";
+    const tag = document.createElement("span");
+    tag.className = "stock-cell-tag";
+    tag.textContent = it.provider;
+    fig.appendChild(img);
+    fig.appendChild(tag);
+    els.stockGrid.appendChild(fig);
+  });
 }
 
 /* ---- 留人体检：纯前端启发式给脚本打"留人分" + 逐镜诊断 ---- */
@@ -1682,6 +1761,233 @@ function openCheckup() {
   if (window.lucide) window.lucide.createIcons();
 }
 
+/* ---- 防垃圾质检闸门：留人分 + 事实溯源 + 反洗稿相似度 ---- */
+
+// 阈值（可按需要调）：留人分 < 60 视为不达标；其余 0 容忍。
+const GATE_RETENTION_MIN = 60;
+// 反洗稿：与原文连续重合 ≥ 这么多字，判「疑似照搬」。
+const PLAGIARISM_RUN = 12;
+// 事实溯源用的「数字+单位」单位表（与渲染端 highlightNumbers 对齐）。
+const FACT_UNITS = "%|‰|小时|分钟|天|年|倍|档|元|块|克|千克|公斤|kg|g|mm|cm|英寸|寸|mAh|W|GB|TB|MP|Hz|fps|nit|尼特|核|nm|万|亿|分";
+const FACT_TOKEN_RE = new RegExp(`\\d+(?:\\.\\d+)?\\s*(?:${FACT_UNITS})`, "g");
+
+// 归一化：去空白与标点，便于做连续重合比对。
+function normForMatch(text) {
+  return String(text || "").replace(/[\s\p{P}\p{S}]/gu, "");
+}
+
+// 最长连续公共子串长度 + 命中片段（用于反洗稿）。a 短、b 长（原文）。
+function longestCommonRun(a, b) {
+  if (!a || !b) return { len: 0, text: "" };
+  const n = a.length;
+  const m = b.length;
+  let prev = new Uint32Array(m + 1);
+  let best = 0;
+  let bestEnd = 0;
+  for (let i = 1; i <= n; i++) {
+    const cur = new Uint32Array(m + 1);
+    const ai = a.charCodeAt(i - 1);
+    for (let j = 1; j <= m; j++) {
+      if (ai === b.charCodeAt(j - 1)) {
+        const v = prev[j - 1] + 1;
+        cur[j] = v;
+        if (v > best) {
+          best = v;
+          bestEnd = i;
+        }
+      }
+    }
+    prev = cur;
+  }
+  return { len: best, text: a.slice(bestEnd - best, bestEnd) };
+}
+
+function gateStatus(ok, warn) {
+  return ok ? "pass" : warn ? "warn" : "fail";
+}
+
+function qualityGate(data) {
+  const tl = Array.isArray(data && data.timeline) ? data.timeline : [];
+
+  // 1) 留人分（复用留人体检）
+  const retention = scoreRetention(data);
+  const retentionOk = retention.overall >= GATE_RETENTION_MIN;
+
+  // 2) 事实溯源：脚本里的「数字+单位」参数能否在输入素材里找到
+  const corpus = normForMatch(
+    `${(els.factsInput && els.factsInput.value) || ""} ${(els.reviewInput && els.reviewInput.value) || ""}`,
+  );
+  const hasCorpus = corpus.length > 8;
+  const unsourced = [];
+  let factCount = 0;
+  tl.forEach((scene, i) => {
+    const text = `${scene.voiceover || ""} ${scene.subtitle || ""} ${(scene.visual && scene.visual.detail) || ""}`;
+    const seen = new Set();
+    (text.match(FACT_TOKEN_RE) || []).forEach((tok) => {
+      const key = tok.replace(/\s+/g, "");
+      if (seen.has(key)) return;
+      seen.add(key);
+      factCount += 1;
+      const numStr = (key.match(/\d+(?:\.\d+)?/) || [""])[0];
+      if (hasCorpus && numStr && !corpus.includes(numStr)) {
+        unsourced.push({ index: scene.index || i + 1, title: scene.title || "", token: key, pos: i });
+      }
+    });
+  });
+  const sourcingOk = unsourced.length === 0;
+
+  // 3) 反洗稿：口播稿与原文的最长连续重合
+  const review = normForMatch((els.reviewInput && els.reviewInput.value) || "").slice(0, 6000);
+  const hasReview = review.length >= PLAGIARISM_RUN;
+  const flagged = [];
+  if (hasReview) {
+    tl.forEach((scene, i) => {
+      const vo = normForMatch(scene.voiceover || "");
+      if (vo.length < PLAGIARISM_RUN) return;
+      const run = longestCommonRun(vo, review);
+      if (run.len >= PLAGIARISM_RUN) {
+        flagged.push({ index: scene.index || i + 1, title: scene.title || "", len: run.len, snippet: run.text, pos: i });
+      }
+    });
+  }
+  const plagiarismOk = flagged.length === 0;
+
+  const checks = [
+    {
+      key: "retention",
+      label: "留人体检",
+      status: gateStatus(retentionOk, false),
+      score: retention.overall,
+      summary: retentionOk
+        ? `留人分 ${retention.overall}（${retention.grade.label}），达标`
+        : `留人分 ${retention.overall}（${retention.grade.label}），低于 ${GATE_RETENTION_MIN} 分，先优化钩子/节奏/结尾`,
+      detail: retention.dims.filter((d) => d.score < 70).map((d) => `${d.label}：${d.note}`),
+    },
+    {
+      key: "sourcing",
+      label: "事实溯源",
+      status: !hasCorpus ? "warn" : gateStatus(sourcingOk, false),
+      summary: !hasCorpus
+        ? "没填「真实参数/评测素材」，无法核查参数来源（建议补上以便溯源）"
+        : sourcingOk
+          ? `脚本里 ${factCount} 处参数都能在素材里找到来源`
+          : `${unsourced.length} 处参数在输入素材里查不到，疑似编造，请核对`,
+      detail: unsourced.map((u) => `镜 ${u.index}「${u.title}」：${u.token} 在素材中无出处`),
+    },
+    {
+      key: "plagiarism",
+      label: "原创度（反洗稿）",
+      status: !hasReview ? "warn" : gateStatus(plagiarismOk, false),
+      summary: !hasReview
+        ? "没填「评测素材原文」，跳过反洗稿比对"
+        : plagiarismOk
+          ? "口播稿与原文无长段照搬，原创度 OK"
+          : `${flagged.length} 镜与原文有 ≥${PLAGIARISM_RUN} 字连续重合，疑似洗稿，请改写`,
+      detail: flagged.map((f) => `镜 ${f.index}「${f.title}」：连续 ${f.len} 字「${f.snippet}」`),
+    },
+  ];
+
+  // 只有「硬性维度」（不含 warn 的 skip 情况）失败才拦截；warn 不拦。
+  const pass = retentionOk && sourcingOk && plagiarismOk;
+  return { pass, checks, retention, unsourced, flagged };
+}
+
+let gateMask = null;
+
+function closeGate() {
+  if (gateMask) {
+    gateMask.remove();
+    gateMask = null;
+    document.removeEventListener("keydown", onGateKey);
+  }
+}
+function onGateKey(event) {
+  if (event.key === "Escape") closeGate();
+}
+
+const GATE_TONE = { pass: "var(--teal)", warn: "var(--amber)", fail: "var(--red)" };
+const GATE_ICON = { pass: "shield-check", warn: "shield-alert", fail: "shield-x" };
+
+// onProceed 传入时（来自渲染流程）显示「仍要渲染」放行按钮；不传则是纯查看。
+function openGate(report, onProceed) {
+  closeGate();
+  const mask = document.createElement("div");
+  mask.className = "checkup-mask";
+
+  const checksHtml = report.checks
+    .map((c) => {
+      const tone = GATE_TONE[c.status];
+      const detail = c.detail && c.detail.length
+        ? `<ul class="gate-detail">${c.detail.slice(0, 8).map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
+        : "";
+      return `
+      <div class="gate-check gate-${c.status}">
+        <div class="gate-check-head">
+          <i data-lucide="${GATE_ICON[c.status]}" style="color:${tone}"></i>
+          <span class="gate-check-label">${escapeHtml(c.label)}</span>
+          <span class="gate-check-tag" style="color:${tone};border-color:${tone}">${c.status === "pass" ? "通过" : c.status === "warn" ? "提醒" : "未通过"}</span>
+        </div>
+        <p class="gate-check-summary">${escapeHtml(c.summary)}</p>
+        ${detail}
+      </div>`;
+    })
+    .join("");
+
+  const passTone = report.pass ? "var(--teal)" : "var(--red)";
+  const footActions = onProceed
+    ? `<button class="icon-button" id="gateClose2" type="button"><i data-lucide="pencil"></i><span>去修改</span></button>
+       <button class="icon-button gate-proceed" id="gateProceed" type="button"><i data-lucide="play"></i><span>仍要渲染</span></button>`
+    : `<button class="icon-button" id="gateClose2" type="button"><i data-lucide="check"></i><span>知道了</span></button>`;
+
+  mask.innerHTML = `
+    <div class="checkup-card gate-card" role="dialog" aria-label="质检闸门">
+      <div class="checkup-head">
+        <div>
+          <h3><i data-lucide="shield-check"></i> 防垃圾质检闸门</h3>
+          <p>出片前三道闸门：留人体检 · 事实溯源 · 反洗稿。不达标会拦下，可人工放行。</p>
+        </div>
+        <button class="ck-close" id="gateClose" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
+      </div>
+      <div class="checkup-body">
+        <div class="gate-verdict" style="border-color:${passTone};color:${passTone}">
+          <i data-lucide="${report.pass ? "shield-check" : "shield-alert"}"></i>
+          <strong>${report.pass ? "三道闸门全部通过，可以渲染" : "有闸门未通过，建议先修改再渲染"}</strong>
+        </div>
+        ${checksHtml}
+      </div>
+      <div class="checkup-foot gate-foot">${footActions}</div>
+    </div>`;
+
+  mask.addEventListener("click", (event) => {
+    if (event.target === mask) closeGate();
+  });
+  document.body.appendChild(mask);
+  gateMask = mask;
+  document.addEventListener("keydown", onGateKey);
+
+  const closeBtn = mask.querySelector("#gateClose");
+  if (closeBtn) closeBtn.addEventListener("click", closeGate);
+  const closeBtn2 = mask.querySelector("#gateClose2");
+  if (closeBtn2) closeBtn2.addEventListener("click", closeGate);
+  const proceed = mask.querySelector("#gateProceed");
+  if (proceed && onProceed) {
+    proceed.addEventListener("click", () => {
+      closeGate();
+      onProceed();
+    });
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function openGateStandalone() {
+  const data = currentTimeline();
+  if (!data.timeline || !data.timeline.length) {
+    setCueHint("还没有分镜可质检，先生成脚本。");
+    return;
+  }
+  openGate(qualityGate(data), null);
+}
+
 const DRAFT_KEY = "directorDraft_v1";
 
 function saveDraft() {
@@ -1770,6 +2076,7 @@ function bindEvents() {
   els.regenerateBtn.addEventListener("click", generateTimelineFromApi);
   els.addSceneBtn.addEventListener("click", addScene);
   if (els.checkupBtn) els.checkupBtn.addEventListener("click", openCheckup);
+  if (els.gateBtn) els.gateBtn.addEventListener("click", openGateStandalone);
   els.advToggle.addEventListener("click", toggleAdvanced);
   if (els.resetBtn) els.resetBtn.addEventListener("click", resetAll);
   if (els.zhihuSearchBtn) els.zhihuSearchBtn.addEventListener("click", () => searchZhihu());
@@ -1861,6 +2168,14 @@ function bindEvents() {
   if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
 
   if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
+  if (els.stockSearchBtn) els.stockSearchBtn.addEventListener("click", searchStock);
+  if (els.stockQuery)
+    els.stockQuery.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        searchStock();
+      }
+    });
 
   els.copyPromptBtn.addEventListener("click", async () => {
     const prompt = buildPrompt();
