@@ -55,7 +55,10 @@ bash render.sh            # 再渲成 MP4
 - 动画数据驱动：产品图 Ken Burns、标题/字幕逐镜淡入；字幕里的「数字+单位」（如 `12 小时`/`20%`）自动高亮。
 - **事实溯源角标**：`visual.cite`（或 `scene.cite`，如「实测」「官方规格」）→ 画面左下角渲一条「据：…」出处角标。
 - **素材标记**：`visual.assetSource === "stock"`（B 的 autoStock 自动空镜）→ 右上角标「素材·示意（待替换）」，提醒实拍优先。
-- **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕。
+- **横评对比矩阵**：`visual.compare`（或 `scene.compare`）= `{ products:[...], rows:[{label,unit,better:"high"|"low",values:[...]}] }`
+  → 渲一张对比表：每行按 `better`（`high`=越大越好 / `low`=越小越好）自动判出该维度胜者并金色高亮（带 ✓），
+  综合拿下行数最多的产品在表头戴 👑。前端「横评对比」面板用简易 DSL 生成此结构（`这几款选谁`对比镜）。
+- **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕；`compare` 不足 2 个产品/无有效行则忽略。
 - **确定性**：不用 `Date.now()`/`Math.random()`，相同输入产出相同 HTML（符合 HyperFrames 渲染要求）。
 - `index.html` 顶部标了「由 build.mjs 自动生成，请勿手改」——要改样式/动画请改 `build.mjs`。
 
@@ -89,10 +92,32 @@ bash worker.start.sh               # 默认听 :9234
 3. `buildHtml()` 生成合成 HTML。
 4. `hyperframes render`（带 `gpu:true` 则 `--gpu` 走 NVENC）→ 无声视频。
 5. ffmpeg 把逐镜音频按时长拼成声轨并混入 → 最终 MP4。
+6. （可选）配了 R2 凭证则把 MP4 传到 Cloudflare R2，返回可分享 URL；否则直接回传 MP4。
 
 > 缺图自动空镜（可选）：`autoStock:true` 时，没有 `visual.asset` 的分镜会按关键词
 > （`visual.stockQuery`/`headline`/标题/产品+品类）从 Pexels/Pixabay 拉一张竖屏图下载进合成。
 > 尊重实拍优先：已有素材不覆盖，自动拉的标 `assetSource:"stock"`。
+
+### R2 存片 + 分享链接（可选）
+
+配在 **worker 机**上（不是主站点后端）。配齐下列变量后，出片会传到 Cloudflare R2，
+`/render` 返回 JSON `{ ok, url, key, public, bytes }`，前端给「播放 / 下载 / 复制分享链接」；
+**缺凭证或上传失败则自动回退**为直接返回 MP4 二进制（老路），不影响出片。
+
+```bash
+export R2_ACCOUNT_ID=...            # Cloudflare 账号 ID
+export R2_ACCESS_KEY_ID=...         # R2 → 管理 API 令牌 创建
+export R2_SECRET_ACCESS_KEY=...
+export R2_BUCKET=3c-renders
+export R2_PUBLIC_BASE=https://pub-xxxx.r2.dev   # bucket 开 Public/绑自定义域后的公开地址
+# export R2_ENDPOINT=...            # 可选，默认 https://<account>.r2.cloudflarestorage.com
+```
+
+- 用 S3 兼容 PutObject + AWS SigV4 自签（`r2.mjs`，零第三方依赖）。
+- 没配 `R2_PUBLIC_BASE`：返回的是私有 S3 endpoint URL（不能直接公网播放），需把 bucket
+  设为 Public 或绑自定义域再填 `R2_PUBLIC_BASE`。
+- object key：`renders/<时间戳>-<随机>-<标题>.mp4`，避免重名覆盖。
+- `GET /health` 的 `hasR2` 反映是否已配置。
 
 主站点配置：在后端设 `RENDER_URL=https://your-gpu-host:9234`（与 `VOICE_CLONE_URL` 并列）。
 未配置返 501、连不上返 502，前端都会给明确提示不卡死。

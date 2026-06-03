@@ -78,11 +78,16 @@ const els = {
   exportSrtBtn: document.querySelector("#exportSrtBtn"),
   exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
   renderVideoBtn: document.querySelector("#renderVideoBtn"),
+  renderFormat: document.querySelector("#renderFormat"),
+  exportPosterBtn: document.querySelector("#exportPosterBtn"),
   stockQuery: document.querySelector("#stockQuery"),
   stockSearchBtn: document.querySelector("#stockSearchBtn"),
   stockGrid: document.querySelector("#stockGrid"),
   stockTip: document.querySelector("#stockTip"),
   autoStockToggle: document.querySelector("#autoStockToggle"),
+  compareSpec: document.querySelector("#compareSpec"),
+  compareInsertBtn: document.querySelector("#compareInsertBtn"),
+  compareTip: document.querySelector("#compareTip"),
   track: document.querySelector("#track"),
   trackRuler: document.querySelector("#trackRuler"),
   clipEditor: document.querySelector("#clipEditor"),
@@ -1398,6 +1403,7 @@ async function performRender(data, apiBase, voice) {
   const body = { timeline: data, voice };
   if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
   if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
+  if (els.renderFormat && els.renderFormat.value) body.format = els.renderFormat.value;
 
   try {
     const response = await fetch(`${apiBase}/api/render`, {
@@ -1406,20 +1412,33 @@ async function performRender(data, apiBase, voice) {
       body: JSON.stringify(body)
     });
     const type = response.headers.get("content-type") || "";
-    if (!response.ok || type.includes("application/json")) {
-      let message = "渲染失败";
-      try {
-        const err = await response.json();
-        message = err.error || message;
-      } catch (e) {
-        /* ignore */
+    if (type.includes("application/json")) {
+      const payload = await response.json().catch(() => ({}));
+      // 配了 R2：成片已上传，返回可分享 URL（可播/下载/分享）。
+      if (response.ok && payload.ok && payload.url) {
+        lastRenderUrl = payload.url;
+        showRenderPreview(payload.url, { shareUrl: payload.url, public: payload.public });
+        const mb = payload.bytes ? `${(payload.bytes / 1024 / 1024).toFixed(1)}MB ` : "";
+        setCueHint(
+          payload.public
+            ? `渲染完成 ✓ 成片已存云端（${mb}MP4），下方可播放/下载/复制分享链接。`
+            : `渲染完成 ✓ 成片已存 R2（${mb}MP4）。链接为私有 bucket，需在 worker 配 R2_PUBLIC_BASE 才能公网播放。`
+        );
+        return;
       }
+      // 否则是错误 JSON
+      let message = payload.error || "渲染失败";
       if (response.status === 501) {
         message = "渲染服务未配置：请在后端设置 RENDER_URL 指向你的渲染 worker（见 video-render/README）。";
       } else if (response.status === 502) {
         message = `连不上渲染服务，GPU 机可能没开机：${message}`;
       }
       setCueHint(message);
+      setRenderBtn("渲染视频", false);
+      return;
+    }
+    if (!response.ok) {
+      setCueHint("渲染失败");
       setRenderBtn("渲染视频", false);
       return;
     }
@@ -1439,7 +1458,7 @@ async function performRender(data, apiBase, voice) {
   }
 }
 
-function showRenderPreview(url) {
+function showRenderPreview(url, opts = {}) {
   let host = document.querySelector("#renderPreview");
   if (!host) {
     host = document.createElement("div");
@@ -1458,12 +1477,268 @@ function showRenderPreview(url) {
   video.playsInline = true;
   host.appendChild(title);
   host.appendChild(video);
+
+  // R2 托管成片：给「下载 / 复制分享链接」操作。
+  if (opts.shareUrl) {
+    const bar = document.createElement("div");
+    bar.className = "render-share";
+    const dl = document.createElement("a");
+    dl.className = "icon-button";
+    dl.href = opts.shareUrl;
+    dl.download = `${safeName()}.mp4`;
+    dl.textContent = "下载 MP4";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "icon-button";
+    copy.textContent = "复制分享链接";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(opts.shareUrl);
+        copy.textContent = "已复制 ✓";
+        setTimeout(() => (copy.textContent = "复制分享链接"), 1600);
+      } catch (e) {
+        copy.textContent = opts.shareUrl;
+      }
+    });
+    bar.appendChild(dl);
+    bar.appendChild(copy);
+    if (opts.public === false) {
+      const note = document.createElement("span");
+      note.className = "render-share-note";
+      note.textContent = "（私有链接，配 R2_PUBLIC_BASE 后可公开播放）";
+      bar.appendChild(note);
+    }
+    host.appendChild(bar);
+  }
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---- 多端裁剪：封面 + 小红书图文版（抽静帧 + 文案，不出视频）---- */
+
+function setPosterBtn(label, busy) {
+  const btn = els.exportPosterBtn;
+  if (!btn) return;
+  const span = btn.querySelector("span");
+  if (span) span.textContent = label;
+  btn.disabled = Boolean(busy);
+  btn.classList.toggle("is-busy", Boolean(busy));
+}
+
+async function exportPoster() {
+  const data = currentTimeline();
+  if (!data.timeline || !data.timeline.length) {
+    setCueHint("还没有分镜，先生成脚本。");
+    return;
+  }
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setCueHint("图文导出需要部署后端（本地 file:// 无法调用渲染服务）。");
+    return;
+  }
+  setPosterBtn("生成中…", true);
+  setCueHint("正在抽帧出封面 + 小红书配图，并生成图文文案，请稍候…");
+
+  const body = { timeline: data, format: "1:1" };
+  if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
+
+  try {
+    const response = await fetch(`${apiBase}/api/poster`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      setCueHint(payload.error || "图文导出失败");
+      return;
+    }
+    showPosterResult(payload);
+    setCueHint(
+      `图文导出完成 ✓ 共 ${payload.images.length} 张图（${payload.format}）+ 小红书文案，下方可下载/复制。` +
+        (payload.hosted ? "" : "（未配 R2，图为内联，可右键另存）")
+    );
+  } catch (error) {
+    setCueHint(`图文导出出错：${error.message || error}`);
+  } finally {
+    setPosterBtn("图文/封面", false);
+  }
+}
+
+function posterImgSrc(img) {
+  return img && (img.url || img.dataUrl) ? img.url || img.dataUrl : "";
+}
+
+function showPosterResult(payload) {
+  let host = document.querySelector("#posterPreview");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "posterPreview";
+    host.className = "poster-preview";
+    const anchor = els.jsonOutput && els.jsonOutput.closest("section");
+    (anchor || document.body).insertBefore(host, anchor || null);
+  }
+  host.innerHTML = "";
+
+  const title = document.createElement("p");
+  title.className = "render-preview-title";
+  title.textContent = `图文/封面（${payload.format}）`;
+  host.appendChild(title);
+
+  // 配图网格：第一张即封面，每张可下载
+  const grid = document.createElement("div");
+  grid.className = "poster-grid";
+  (payload.images || []).forEach((img, i) => {
+    const src = posterImgSrc(img);
+    if (!src) return;
+    const cell = document.createElement("div");
+    cell.className = "poster-cell";
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = `${safeName()}-${i === 0 ? "cover" : "p" + i}.png`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    const im = document.createElement("img");
+    im.src = src;
+    im.loading = "lazy";
+    a.appendChild(im);
+    cell.appendChild(a);
+    const tag = document.createElement("span");
+    tag.className = "poster-cell-tag";
+    tag.textContent = i === 0 ? "封面" : `图${i + 1}`;
+    cell.appendChild(tag);
+    grid.appendChild(cell);
+  });
+  host.appendChild(grid);
+
+  // 小红书文案：可编辑文本框 + 复制
+  const cap = payload.caption || {};
+  const capBox = document.createElement("textarea");
+  capBox.className = "poster-caption";
+  capBox.rows = 8;
+  capBox.value = cap.text || [cap.title, cap.body, (cap.tags || []).join(" ")].filter(Boolean).join("\n\n");
+  host.appendChild(capBox);
+
+  const bar = document.createElement("div");
+  bar.className = "render-share";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "icon-button";
+  copy.textContent = "复制小红书文案";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(capBox.value);
+      copy.textContent = "已复制 ✓";
+      setTimeout(() => (copy.textContent = "复制小红书文案"), 1600);
+    } catch (e) {
+      capBox.select();
+    }
+  });
+  bar.appendChild(copy);
+  const note = document.createElement("span");
+  note.className = "render-share-note";
+  note.textContent = "图右键/点击另存，文案可改后再复制";
+  bar.appendChild(note);
+  host.appendChild(bar);
+
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 /* ---- 素材库：搜免费可商用空镜（Pexels/Pixabay）---- */
 function setStockTip(text) {
   if (els.stockTip) els.stockTip.textContent = text;
+}
+
+/* ---- 横评对比：解析简易 DSL → 插入对比矩阵镜 ---- */
+
+// 解析一行 "维度(单位, 高/低): 值1, 值2, 值3"。返回 {label, unit, better, values}。
+function parseCompareRow(line) {
+  const m = /^(.+?)(?:[（(]([^)）]*)[)）])?\s*[:：]\s*(.+)$/.exec(line);
+  if (!m) return null;
+  const label = m[1].trim();
+  const meta = (m[2] || "").split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  const values = m[3].split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+  if (!label || values.length === 0) return null;
+  let unit = "";
+  let better = "high";
+  meta.forEach((tok) => {
+    if (/低|越小|越少|smaller|lower/i.test(tok)) better = "low";
+    else if (/高|越大|越多|bigger|higher/i.test(tok)) better = "high";
+    else if (!unit) unit = tok;
+  });
+  return { label, unit, better, values };
+}
+
+// 解析整段对比 DSL → { products, rows }。
+function parseCompareSpec(text) {
+  const lines = String(text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  let products = [];
+  const rows = [];
+  lines.forEach((line) => {
+    if (/^产品[\s]*[:：]/.test(line)) {
+      products = line.replace(/^产品[\s]*[:：]/, "").split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+      return;
+    }
+    const row = parseCompareRow(line);
+    if (row) rows.push(row);
+  });
+  // 没写「产品:」行时，用列数兜底命名
+  if (products.length === 0 && rows.length) {
+    products = rows[0].values.map((_, i) => `产品${i + 1}`);
+  }
+  // 对齐每行列数到 products 数量
+  rows.forEach((r) => {
+    r.values = r.values.slice(0, products.length);
+    while (r.values.length < products.length) r.values.push("—");
+  });
+  return { products, rows: rows.filter((r) => r.values.length === products.length) };
+}
+
+function setCompareTip(text) {
+  if (els.compareTip) els.compareTip.textContent = text;
+}
+
+function insertCompareScene() {
+  if (!initialState.timeline || !Array.isArray(initialState.timeline.timeline) || !initialState.timeline.timeline.length) {
+    setCompareTip("请先生成分镜脚本，再插入对比镜。");
+    return;
+  }
+  const spec = parseCompareSpec(els.compareSpec ? els.compareSpec.value : "");
+  if (spec.products.length < 2) {
+    setCompareTip("至少要 2 个产品。第一行写「产品: A, B, C」，下面每行一个维度。");
+    return;
+  }
+  if (spec.rows.length === 0) {
+    setCompareTip("没解析到对比维度。每行格式：维度(单位, 高/低): 值1, 值2…");
+    return;
+  }
+  const names = spec.products.join(" / ");
+  const t = initialState.timeline.timeline;
+  const at = initialState.currentScene + 1;
+  const scene = {
+    id: "",
+    index: 0,
+    title: "横评对比",
+    start: 0,
+    end: 0,
+    duration: Math.max(8, 4 + spec.rows.length * 1.6),
+    voiceover: `${names}，这几款到底选谁？直接上参数对比，逐项见分晓。`,
+    subtitle: `${spec.products.length} 款横评 · 逐项对比`,
+    visual: {
+      type: "横评对比",
+      layout: initialState.layout,
+      headline: "这几款选谁？",
+      detail: names,
+      asset: "",
+      compare: { products: spec.products, rows: spec.rows }
+    },
+    checks: ["参数以实测/官方为准", "对比项需可溯源"],
+    source: "横评对比矩阵"
+  };
+  t.splice(at, 0, scene);
+  recalcTimeline();
+  initialState.currentScene = at;
+  renderAll(false);
+  setCompareTip(`已插入对比镜（${spec.products.length} 款 × ${spec.rows.length} 项）。可在导演台继续编辑口播/字幕。`);
 }
 
 async function searchStock() {
@@ -2168,7 +2443,9 @@ function bindEvents() {
   if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
 
   if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
+  if (els.exportPosterBtn) els.exportPosterBtn.addEventListener("click", exportPoster);
   if (els.stockSearchBtn) els.stockSearchBtn.addEventListener("click", searchStock);
+  if (els.compareInsertBtn) els.compareInsertBtn.addEventListener("click", insertCompareScene);
   if (els.stockQuery)
     els.stockQuery.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {

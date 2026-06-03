@@ -72,6 +72,15 @@ class RenderInput(BaseModel):
     gpu: bool | None = True
     assets: dict | None = None
     autoStock: bool | None = False
+    format: str | None = "9:16"  # 多端裁剪：9:16 / 16:9 / 1:1
+
+
+class PosterInput(BaseModel):
+    timeline: dict | None = None
+    format: str | None = "1:1"  # 小红书图文默认方图，可传 9:16 出竖屏封面
+    frames: int | None = None
+    assets: dict | None = None
+    autoStock: bool | None = False
 
 
 class RewriteSceneInput(BaseModel):
@@ -770,6 +779,7 @@ async def render(data: RenderInput):
         "cloneSpkId": data.cloneSpkId or "",
         "gpu": data.gpu if data.gpu is not None else True,
         "autoStock": bool(data.autoStock),
+        "format": data.format or "9:16",
     }
     if data.assets:
         payload["assets"] = data.assets
@@ -783,20 +793,74 @@ async def render(data: RenderInput):
         )
 
     content_type = response.headers.get("content-type", "")
-    if response.status_code >= 400 or "application/json" in content_type:
+    # worker 返回 JSON：配了 R2 时是 {ok,url}（透传给前端可播/下载/分享）；否则是出错。
+    if "application/json" in content_type:
         try:
-            err = response.json()
+            body = response.json()
         except ValueError:
-            err = {"error": "渲染服务返回异常", "providerStatus": response.status_code}
+            body = {"error": "渲染服务返回异常", "providerStatus": response.status_code}
+        if response.status_code < 400 and body.get("ok") and body.get("url"):
+            return JSONResponse(body, status_code=200)
         return JSONResponse(
-            {"error": err.get("error") or "渲染失败", "providerStatus": response.status_code},
+            {"error": body.get("error") or "渲染失败", "providerStatus": response.status_code},
             status_code=response.status_code if response.status_code >= 400 else 502,
+        )
+    if response.status_code >= 400:
+        return JSONResponse(
+            {"error": "渲染失败", "providerStatus": response.status_code},
+            status_code=response.status_code,
         )
 
     return Response(
         content=response.content,
         media_type="video/mp4",
         headers={"content-disposition": 'attachment; filename="3c-review.mp4"'},
+    )
+
+
+@app.post("/api/poster")
+async def poster(data: PosterInput):
+    """多端裁剪：封面 + 小红书图文版。转发到 worker 的 /poster（抽静帧+文案，不出视频）。"""
+    render_url = _render_url()
+    if not render_url:
+        return JSONResponse(
+            {"error": "渲染服务未配置（请设置环境变量 RENDER_URL 指向你的渲染 worker）"},
+            status_code=501,
+        )
+    timeline = data.timeline or {}
+    scenes = timeline.get("timeline") if isinstance(timeline, dict) else None
+    if not isinstance(scenes, list) or not scenes:
+        return JSONResponse(
+            {"error": "缺少 Timeline（timeline.timeline 至少要有一个分镜）"}, status_code=400
+        )
+
+    payload = {
+        "timeline": timeline,
+        "format": data.format or "1:1",
+        "autoStock": bool(data.autoStock),
+    }
+    if data.frames:
+        payload["frames"] = data.frames
+    if data.assets:
+        payload["assets"] = data.assets
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as client:
+            response = await client.post(f"{render_url}/poster", json=payload)
+    except httpx.HTTPError as error:
+        return JSONResponse(
+            {"error": f"无法连接渲染服务（可能 GPU 机没开机）：{error}"}, status_code=502
+        )
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = {"error": "渲染服务返回异常", "providerStatus": response.status_code}
+    if response.status_code < 400 and body.get("ok"):
+        return JSONResponse(body, status_code=200)
+    return JSONResponse(
+        {"error": body.get("error") or "图文导出失败", "providerStatus": response.status_code},
+        status_code=response.status_code if response.status_code >= 400 else 502,
     )
 
 
