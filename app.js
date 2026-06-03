@@ -78,6 +78,8 @@ const els = {
   exportSrtBtn: document.querySelector("#exportSrtBtn"),
   exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
   renderVideoBtn: document.querySelector("#renderVideoBtn"),
+  renderFormat: document.querySelector("#renderFormat"),
+  exportPosterBtn: document.querySelector("#exportPosterBtn"),
   stockQuery: document.querySelector("#stockQuery"),
   stockSearchBtn: document.querySelector("#stockSearchBtn"),
   stockGrid: document.querySelector("#stockGrid"),
@@ -1401,6 +1403,7 @@ async function performRender(data, apiBase, voice) {
   const body = { timeline: data, voice };
   if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
   if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
+  if (els.renderFormat && els.renderFormat.value) body.format = els.renderFormat.value;
 
   try {
     const response = await fetch(`${apiBase}/api/render`, {
@@ -1507,6 +1510,136 @@ function showRenderPreview(url, opts = {}) {
     }
     host.appendChild(bar);
   }
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---- 多端裁剪：封面 + 小红书图文版（抽静帧 + 文案，不出视频）---- */
+
+function setPosterBtn(label, busy) {
+  const btn = els.exportPosterBtn;
+  if (!btn) return;
+  const span = btn.querySelector("span");
+  if (span) span.textContent = label;
+  btn.disabled = Boolean(busy);
+  btn.classList.toggle("is-busy", Boolean(busy));
+}
+
+async function exportPoster() {
+  const data = currentTimeline();
+  if (!data.timeline || !data.timeline.length) {
+    setCueHint("还没有分镜，先生成脚本。");
+    return;
+  }
+  const apiBase = getApiBase();
+  if (!apiBase && location.protocol === "file:") {
+    setCueHint("图文导出需要部署后端（本地 file:// 无法调用渲染服务）。");
+    return;
+  }
+  setPosterBtn("生成中…", true);
+  setCueHint("正在抽帧出封面 + 小红书配图，并生成图文文案，请稍候…");
+
+  const body = { timeline: data, format: "1:1" };
+  if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
+
+  try {
+    const response = await fetch(`${apiBase}/api/poster`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      setCueHint(payload.error || "图文导出失败");
+      return;
+    }
+    showPosterResult(payload);
+    setCueHint(
+      `图文导出完成 ✓ 共 ${payload.images.length} 张图（${payload.format}）+ 小红书文案，下方可下载/复制。` +
+        (payload.hosted ? "" : "（未配 R2，图为内联，可右键另存）")
+    );
+  } catch (error) {
+    setCueHint(`图文导出出错：${error.message || error}`);
+  } finally {
+    setPosterBtn("图文/封面", false);
+  }
+}
+
+function posterImgSrc(img) {
+  return img && (img.url || img.dataUrl) ? img.url || img.dataUrl : "";
+}
+
+function showPosterResult(payload) {
+  let host = document.querySelector("#posterPreview");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "posterPreview";
+    host.className = "poster-preview";
+    const anchor = els.jsonOutput && els.jsonOutput.closest("section");
+    (anchor || document.body).insertBefore(host, anchor || null);
+  }
+  host.innerHTML = "";
+
+  const title = document.createElement("p");
+  title.className = "render-preview-title";
+  title.textContent = `图文/封面（${payload.format}）`;
+  host.appendChild(title);
+
+  // 配图网格：第一张即封面，每张可下载
+  const grid = document.createElement("div");
+  grid.className = "poster-grid";
+  (payload.images || []).forEach((img, i) => {
+    const src = posterImgSrc(img);
+    if (!src) return;
+    const cell = document.createElement("div");
+    cell.className = "poster-cell";
+    const a = document.createElement("a");
+    a.href = src;
+    a.download = `${safeName()}-${i === 0 ? "cover" : "p" + i}.png`;
+    a.target = "_blank";
+    a.rel = "noopener";
+    const im = document.createElement("img");
+    im.src = src;
+    im.loading = "lazy";
+    a.appendChild(im);
+    cell.appendChild(a);
+    const tag = document.createElement("span");
+    tag.className = "poster-cell-tag";
+    tag.textContent = i === 0 ? "封面" : `图${i + 1}`;
+    cell.appendChild(tag);
+    grid.appendChild(cell);
+  });
+  host.appendChild(grid);
+
+  // 小红书文案：可编辑文本框 + 复制
+  const cap = payload.caption || {};
+  const capBox = document.createElement("textarea");
+  capBox.className = "poster-caption";
+  capBox.rows = 8;
+  capBox.value = cap.text || [cap.title, cap.body, (cap.tags || []).join(" ")].filter(Boolean).join("\n\n");
+  host.appendChild(capBox);
+
+  const bar = document.createElement("div");
+  bar.className = "render-share";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "icon-button";
+  copy.textContent = "复制小红书文案";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(capBox.value);
+      copy.textContent = "已复制 ✓";
+      setTimeout(() => (copy.textContent = "复制小红书文案"), 1600);
+    } catch (e) {
+      capBox.select();
+    }
+  });
+  bar.appendChild(copy);
+  const note = document.createElement("span");
+  note.className = "render-share-note";
+  note.textContent = "图右键/点击另存，文案可改后再复制";
+  bar.appendChild(note);
+  host.appendChild(bar);
+
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
@@ -2310,6 +2443,7 @@ function bindEvents() {
   if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
 
   if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
+  if (els.exportPosterBtn) els.exportPosterBtn.addEventListener("click", exportPoster);
   if (els.stockSearchBtn) els.stockSearchBtn.addEventListener("click", searchStock);
   if (els.compareInsertBtn) els.compareInsertBtn.addEventListener("click", insertCompareScene);
   if (els.stockQuery)

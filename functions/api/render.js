@@ -37,6 +37,7 @@ export async function onRequestPost(context) {
     cloneSpkId: input.cloneSpkId || "",
     gpu: input.gpu !== false, // 默认让 worker 用 GPU；worker 端不支持会自动软件渲染
     autoStock: Boolean(input.autoStock),
+    format: input.format || "9:16", // 多端裁剪：9:16 / 16:9 / 1:1
     assets: input.assets || undefined
   };
 

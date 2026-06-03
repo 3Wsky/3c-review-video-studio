@@ -476,6 +476,75 @@ textarea:focus {
   color: var(--muted);
 }
 
+/* 多端裁剪：画幅选择 + 图文/封面 */
+.render-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.render-format {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--text, #e7e7ea);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.poster-preview {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+
+.poster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.poster-cell {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.poster-cell img {
+  width: 100%;
+  display: block;
+}
+
+.poster-cell-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+
+.poster-caption {
+  width: 100%;
+  resize: vertical;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg, #16161a);
+  color: var(--text, #e7e7ea);
+  font-size: 13px;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
 .stock-search {
   display: flex;
   gap: 8px;
