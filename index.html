@@ -205,8 +205,18 @@
                 <button class="export-item" id="downloadBriefBtn" type="button" role="menuitem">方案 .md</button>
               </div>
             </div>
-            <button class="icon-button render-btn" id="renderVideoBtn" type="button" title="把当前分镜渲染成 MP4（需配置渲染 worker RENDER_URL）">
-              <i data-lucide="clapperboard"></i><span>渲染视频</span>
+            <div class="render-group">
+              <select id="renderFormat" class="render-format" title="多端裁剪：选输出画幅">
+                <option value="9:16">9:16 竖屏（抖音/快手）</option>
+                <option value="16:9">16:9 横屏（B站/PC）</option>
+                <option value="1:1">1:1 方图</option>
+              </select>
+              <button class="icon-button render-btn" id="renderVideoBtn" type="button" title="把当前分镜渲染成 MP4（需配置渲染 worker RENDER_URL）">
+                <i data-lucide="clapperboard"></i><span>渲染视频</span>
+              </button>
+            </div>
+            <button class="icon-button" id="exportPosterBtn" type="button" title="一次产出封面图 + 小红书图文版（抽静帧 + 文案，不出视频，很快）">
+              <i data-lucide="image"></i><span>图文/封面</span>
             </button>
             <button class="icon-button" id="resetBtn" type="button" title="清空草稿，重新开始">
               <i data-lucide="rotate-ccw"></i><span>重置</span>

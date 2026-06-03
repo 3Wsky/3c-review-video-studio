@@ -21,6 +21,17 @@ const FPS = 30;
 const WIDTH = 1080;
 const HEIGHT = 1920;
 
+// 多端裁剪：同一 Timeline 渲不同画幅。默认 9:16（抖音/快手），16:9（B站），1:1（小红书/方图）。
+const FORMATS = {
+  "9:16": { w: 1080, h: 1920, cls: "fmt-9x16", resolution: "portrait" },
+  "16:9": { w: 1920, h: 1080, cls: "fmt-16x9", resolution: "landscape" },
+  "1:1": { w: 1080, h: 1080, cls: "fmt-1x1", resolution: "square" },
+};
+export function resolveFormat(format) {
+  return FORMATS[String(format || "9:16").trim()] || FORMATS["9:16"];
+}
+export const SUPPORTED_FORMATS = Object.keys(FORMATS);
+
 // ---------- 小工具 ----------
 
 function escapeHtml(value) {
@@ -292,10 +303,76 @@ function round(n) {
   return Math.round(n * 1000) / 1000;
 }
 
+// ---------- 小红书图文版（多端裁剪之一）----------
+
+// 从同一条 Timeline 提炼一份小红书图文文案：标题 + 正文（钩子→逐镜要点→结论）+ 话题标签。
+// 纯函数、确定性，便于单测。配图由 worker 用 snapshot 出（1:1），这里只产文字。
+export function buildXiaohongshuCaption(timeline) {
+  const tl = Array.isArray(timeline?.timeline) ? timeline.timeline : [];
+  const product = String(timeline?.project?.product || "").trim();
+  const category = String(timeline?.project?.category || "").trim();
+
+  const pick = (s) =>
+    String(s?.headline || s?.visual?.headline || s?.subtitle || s?.voiceover || "").trim();
+  const detail = (s) =>
+    String(s?.detail || s?.visual?.detail || s?.subtitle || s?.voiceover || "").trim();
+
+  const titleBase = pick(tl[0]) || (product ? `${product} 上手实测` : "实测分享");
+  const title = product && !titleBase.includes(product) ? `${product}｜${titleBase}` : titleBase;
+
+  const lines = [];
+  if (tl.length) {
+    const hook = String(tl[0]?.voiceover || tl[0]?.subtitle || pick(tl[0])).trim();
+    if (hook) lines.push(hook);
+  }
+  // 中间镜做要点项（去掉首尾），首尾分别当钩子/结论
+  const body = tl.slice(1, Math.max(1, tl.length - 1));
+  for (const s of body) {
+    const head = pick(s);
+    const det = detail(s);
+    if (!head && !det) continue;
+    if (head && det && head !== det) lines.push(`・${head}：${det}`);
+    else lines.push(`・${head || det}`);
+  }
+  if (tl.length > 1) {
+    const last = tl[tl.length - 1];
+    const concl = String(last?.voiceover || last?.subtitle || pick(last)).trim();
+    if (concl) lines.push(concl);
+  }
+
+  // 话题标签：品类 + 产品 + 通用 3C，去重
+  const rawTags = ["3C测评", "数码测评", "好物分享"];
+  if (category) rawTags.unshift(category);
+  if (product) rawTags.unshift(product);
+  // 横评对比里的竞品也带上
+  for (const s of tl) {
+    const cols = s?.compare?.products || s?.compare?.columns;
+    if (Array.isArray(cols)) for (const c of cols) {
+      const name = String(typeof c === "string" ? c : c?.name || "").trim();
+      if (name) rawTags.push(name);
+    }
+  }
+  const seen = new Set();
+  const tags = [];
+  for (const t of rawTags) {
+    const k = t.replace(/\s+/g, "");
+    if (k && !seen.has(k)) {
+      seen.add(k);
+      tags.push(`#${k}`);
+    }
+  }
+
+  const text = [title, "", lines.join("\n"), "", tags.join(" ")].join("\n").trim() + "\n";
+  return { title, body: lines.join("\n"), tags, text };
+}
+
 // ---------- 组装整页 ----------
 
 export function buildHtml(timeline, opts = {}) {
   const assetsDir = opts.assetsDir || null;
+  const fmt = resolveFormat(opts.format);
+  const W = fmt.w;
+  const H = fmt.h;
   const scenes = normalizeScenes(timeline, assetsDir);
   if (scenes.length === 0) throw new Error("Timeline 为空：timeline[] 没有分镜");
   const total = round(scenes.reduce((sum, s) => sum + s.duration, 0));
@@ -305,13 +382,13 @@ export function buildHtml(timeline, opts = {}) {
   const tweens = scenes.map(sceneTimeline).filter(Boolean).join("\n");
 
   return `<!doctype html>
-<html lang="zh" data-resolution="portrait">
+<html lang="zh" data-resolution="${fmt.resolution}">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=${WIDTH}, height=${HEIGHT}" />
+    <meta name="viewport" content="width=${W}, height=${H}" />
     <!--
       由 build.mjs 从 Timeline JSON 自动生成，请勿手改（改模板请改 build.mjs）。
-      产品：${product}
+      产品：${product} ｜ 画幅：${fmt.cls}（${W}×${H}）
       CJK 字体：HyperFrames 渲染走确定性字体，默认不含中文。Linux worker 需装
       fonts-noto-cjk 或在下方 style 内 @font-face 内嵌 Noto Sans SC，否则中文变方块。
     -->
@@ -319,7 +396,7 @@ export function buildHtml(timeline, opts = {}) {
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body {
-        width: ${WIDTH}px; height: ${HEIGHT}px; overflow: hidden;
+        width: ${W}px; height: ${H}px; overflow: hidden;
         background: #0b0d12;
         font-family: "PingFang SC", "Source Han Sans", "Microsoft YaHei",
           "Noto Sans SC", "WenQuanYi Zen Hei", sans-serif;
@@ -416,16 +493,31 @@ export function buildHtml(timeline, opts = {}) {
         position: absolute; top: 6px; right: 12px;
         font-size: 24px; font-style: normal; color: #1a3a1a;
       }
+
+      /* 多端裁剪：横屏 16:9（更宽更矮）——上提标题、收窄中部矩阵，避免左右过空/下方溢出 */
+      .fmt-16x9 .badge { top: 56px; }
+      .fmt-16x9 .title { top: 118px; font-size: 78px; left: 200px; right: 200px; }
+      .fmt-16x9 .detail { top: 340px; left: 280px; right: 280px; }
+      .fmt-16x9 .compare { top: 250px; left: 360px; right: 360px; }
+      .fmt-16x9 .subtitle { bottom: 84px; left: 200px; right: 200px; }
+      .fmt-16x9 .cite { bottom: 56px; }
+      /* 方图 1:1（小红书）——整体上移收紧 */
+      .fmt-1x1 .badge { top: 52px; }
+      .fmt-1x1 .title { top: 116px; font-size: 74px; }
+      .fmt-1x1 .detail { top: 340px; }
+      .fmt-1x1 .compare { top: 250px; left: 70px; right: 70px; }
+      .fmt-1x1 .subtitle { bottom: 90px; }
     </style>
   </head>
   <body>
     <div
       id="root"
+      class="${fmt.cls}"
       data-composition-id="main"
       data-start="0"
       data-duration="${total}"
-      data-width="${WIDTH}"
-      data-height="${HEIGHT}"
+      data-width="${W}"
+      data-height="${H}"
       data-fps="${FPS}"
     >
 ${body}
@@ -445,12 +537,13 @@ ${tweens}
 // ---------- CLI ----------
 
 function parseArgs(argv) {
-  const args = { in: null, out: "index.html", assets: "assets" };
+  const args = { in: null, out: "index.html", assets: "assets", format: "9:16" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--in" || a === "-i") args.in = argv[++i];
     else if (a === "--out" || a === "-o") args.out = argv[++i];
     else if (a === "--assets") args.assets = argv[++i];
+    else if (a === "--format" || a === "-f") args.format = argv[++i];
   }
   return args;
 }
@@ -458,15 +551,18 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.in) {
-    console.error("用法: node build.mjs --in timeline.json --out index.html [--assets assets]");
+    console.error(
+      "用法: node build.mjs --in timeline.json --out index.html [--assets assets] [--format 9:16|16:9|1:1]",
+    );
     process.exit(1);
   }
   const timeline = JSON.parse(readFileSync(resolve(args.in), "utf8"));
   const assetsDir = args.assets ? resolve(args.assets) : null;
-  const html = buildHtml(timeline, { assetsDir });
+  const fmt = resolveFormat(args.format);
+  const html = buildHtml(timeline, { assetsDir, format: args.format });
   writeFileSync(resolve(args.out), html, "utf8");
   const n = Array.isArray(timeline?.timeline) ? timeline.timeline.length : 0;
-  console.log(`✓ 已生成 ${args.out}（${n} 个分镜）`);
+  console.log(`✓ 已生成 ${args.out}（${n} 个分镜，${fmt.cls} ${fmt.w}×${fmt.h}）`);
 }
 
 // 仅在作为脚本直接运行时执行（被 import 时不跑）
