@@ -53,6 +53,8 @@ bash render.sh            # 再渲成 MP4
 - 每个 `timeline[i]` → 一段 `.scene.clip`：背景层（`visual.asset` 命中 `assets/` 里的图就用，
   否则纯渐变背景）+ 渐变遮罩 + 标题(`visual.headline`)/副标题(`visual.detail`)/字幕(`subtitle`∨`voiceover`)。
 - 动画数据驱动：产品图 Ken Burns、标题/字幕逐镜淡入；字幕里的「数字+单位」（如 `12 小时`/`20%`）自动高亮。
+- **事实溯源角标**：`visual.cite`（或 `scene.cite`，如「实测」「官方规格」）→ 画面左下角渲一条「据：…」出处角标。
+- **素材标记**：`visual.assetSource === "stock"`（B 的 autoStock 自动空镜）→ 右上角标「素材·示意（待替换）」，提醒实拍优先。
 - **安全降级**：缺字段不报错——没产品图→纯背景，没标题→只渲字幕。
 - **确定性**：不用 `Date.now()`/`Math.random()`，相同输入产出相同 HTML（符合 HyperFrames 渲染要求）。
 - `index.html` 顶部标了「由 build.mjs 自动生成，请勿手改」——要改样式/动画请改 `build.mjs`。
