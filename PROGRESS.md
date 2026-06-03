@@ -2,7 +2,7 @@
 
 > 这份文档记录项目的开发进度（已完成 / 进行中 / 待办）、架构、密钥位置和"换电脑如何续上"。
 > **每次有进展都要更新这份文件并提交，** 这样换设备 `git clone` 后就能接着开发。
-> 最近更新：2026-06（B/C/D/E/F 五大功能已全部合并进 main；正在 Windows 5060 上部署两个 GPU 服务）
+> 最近更新：2026-06（B/C/D/E/F 已全部合并进 main；5060 部署：worker+命名隧道已通、`RENDER_URL` 已配通并验证转发；待办=把服务做成常驻 + 端到端出片 + 装克隆音色。详见第 9 节）
 
 ---
 
@@ -40,7 +40,7 @@
 | `OPENAI_MODEL` | `MiMo-V2.5` | 文本生成模型 |
 | `ZHIHU_ACCESS_SECRET` | 知乎 Access Secret（Secret） | 知乎搜索鉴权 |
 | `VOICE_CLONE_URL` | 自部署 CosyVoice 服务的公网地址（可选） | 配置后「我的克隆音色」可用，见 `voice-clone/README.md` |
-| `RENDER_URL` | 自部署视频渲染 worker 的公网地址（可选） | 「渲染视频/图文封面」按钮要用；未配返 501，前端不卡死。见 `video-render/README.md` |
+| `RENDER_URL` | **已配** = `https://render.1go.im`（命名隧道固定地址）| 「渲染视频/图文封面」按钮要用；未配返 501。已在 Production 配好并重部署，`/api/render` 验证转发成功。见 `video-render/README.md` |
 
 > 本地跑 FastAPI 时同名变量放 `backend/.env`（参考 `backend/.env.example`），不要提交真实密钥。
 
@@ -84,7 +84,7 @@
 - [x] **渲染地基**（PR #18）：`video-render/` 9:16 竖屏样例模板（产品图 Ken Burns + 参数卡数字滚动 + 进度条 + 逐句字幕）+ `render.sh` + README。**坑：HyperFrames 走确定性字体，默认不含中文 → Linux worker 需装 `fonts-noto-cjk` 或模板内嵌 Noto Sans SC，否则中文变方块。**
 - [x] **Timeline JSON → 合成 HTML 自动生成**（PR #19）：`build.mjs` 每镜转一段 `.scene.clip`，数字+单位自动高亮，缺字段安全降级，确定性输出。
 - [x] **渲染 worker 一站式出片**（PR #20）：`worker.mjs` 收 Timeline+音色 → 逐镜配音、ffprobe 校准真实时长 → 生成 HTML → `hyperframes render` → ffmpeg 混音 → MP4。`/api/render` 转发（`RENDER_URL`），前端「渲染视频」按钮 + 离线降级。
-- [ ] **部署到 5060**（进行中）：Windows + WSL2(Ubuntu)。见第 7 节「在 5060 上部署 GPU 服务」。
+- [~] **部署到 5060**（进行中，已完成大半）：Windows 11 + WSL2(Ubuntu)。worker(:9234) 已跑通、命名隧道 `render.1go.im` 已通、`RENDER_URL` 已配通验证转发。**剩：把服务做成常驻（关窗口/待机不断）+ 端到端出片 + worker 配 MiMo TTS key + 装克隆音色(:9233)。** 详见第 9 节。
 
 ---
 
@@ -102,7 +102,7 @@
 
 ## 7. 待办 / 路线图 📋
 
-- [ ] **完成 5060 部署**（当前任务）：起 worker(:9234) + 克隆音色(:9233)，用 Cloudflare Tunnel 暴露公网，在 Cloudflare Pages 配 `RENDER_URL`/`VOICE_CLONE_URL`。详见第 9 节。
+- [~] **完成 5060 部署**（当前任务，进度见第 9 节）：worker + 命名隧道 + `RENDER_URL` 已通；剩 = ①把 worker/隧道做成 systemd 常驻服务（现在是前台窗口，关机就停）②端到端跑一条真实出片 ③worker 配 `OPENAI_API_KEY`/`OPENAI_BASE_URL`（MiMo）让成片有声 ④装克隆音色(:9233) + 配 `VOICE_CLONE_URL=https://voice.1go.im`。
 - [ ] **端到端实测**：部署好后用真实产品跑「生成→配音→渲染出 MP4」「图文/封面」全链路，验证中文字体、NVENC、R2 分享链接。
 - [ ] **数据可视化参数卡**（推荐，未做）：把真实参数（续航/重量/价格/跑分）渲成动画条形图/雷达图/进度环（ECharts/D3 + GSAP），最能体现「有用」。
 - [ ] **逐词字幕**：可选 `hyperframes transcribe`（内置 Whisper，替代单独 WhisperX）做卡拉OK字幕。
@@ -153,7 +153,46 @@ curl http://localhost:9233/health   # modelLoaded:true, cuda:true
 
 ---
 
-## 8. 提交规范小抄
+### 9.1 本次部署已做到哪一步（2026-06，5060 笔记本 = Windows 11 + WSL2）
+
+机器：**RTX 5060 Laptop（8GB）+ Windows 11**。WSL2 的 Ubuntu 装在 **D 盘**（`D:\WSL`），WSL 用户名 `administrator`，仓库克隆在 `~/3c-review-video-studio`。
+
+**✅ 已完成：**
+1. WSL2 + Ubuntu 装到 D 盘（`wsl --install --no-distribution` 先装平台 → 重启 → `wsl --install -d Ubuntu --location D:\WSL`）。
+2. `nvidia-smi` 在 WSL 内看到 RTX 5060（驱动 610 / CUDA 13.3，GPU 透传成功）。
+3. 基础依赖：`git python3 python3-pip python3-venv ffmpeg fonts-noto-cjk curl` + Node 22。
+4. 起渲染 worker：`cd ~/3c-review-video-studio/video-render && bash worker.start.sh`（:9234），`/health` 返回 `ok:true`，`hyperframes@0.6.69` 就绪。
+5. **命名 Cloudflare Tunnel**（固定地址，重启不变）：
+   ```bash
+   curl -L --output /tmp/cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+   sudo dpkg -i /tmp/cloudflared.deb
+   cloudflared tunnel login                 # 浏览器授权域名 1go.im
+   cloudflared tunnel create 3c-worker      # 凭证存 ~/.cloudflared/<id>.json + cert.pem
+   cloudflared tunnel route dns 3c-worker render.1go.im
+   cloudflared tunnel route dns 3c-worker voice.1go.im
+   # 写 ~/.cloudflared/config.yml：
+   #   tunnel: <id>
+   #   credentials-file: /home/administrator/.cloudflared/<id>.json
+   #   ingress:
+   #     - hostname: render.1go.im  ->  service: http://localhost:9234
+   #     - hostname: voice.1go.im   ->  service: http://localhost:9233
+   #     - service: http_status:404
+   cloudflared tunnel run 3c-worker         # 前台运行
+   ```
+   外网验证 `https://render.1go.im/health` 返回 200（`voice.1go.im` 在克隆音色起来前是 502，正常）。
+6. Cloudflare Pages → Settings → 变量(Production) 加 `RENDER_URL = https://render.1go.im`（无结尾`/`）→ 重新部署 → 外网打 `/api/render` 不再 501、能转发到 worker（验证通过）。
+
+**⏳ 待办（下次开机继续）：**
+- **A. 把 worker + 隧道做成常驻服务**（重要！现在是前台窗口跑，关窗口/笔记本待机/关机就断）。WSL 里建议用 `systemd`（新版 WSL 默认开 systemd，可在 `/etc/wsl.conf` 加 `[boot]\nsystemd=true`）写两个 service：一个 `node worker.mjs`，一个 `cloudflared tunnel run 3c-worker`；或临时用 `nohup ... &`。另外 Windows 电源设置改「合盖不睡眠/插电常亮」。
+- **B. worker 配 MiMo 配音 key 让成片有声**：worker 启动前 `export OPENAI_API_KEY=<tp- key>` + `export OPENAI_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1`（同 Cloudflare 那套），否则渲出来是静音片。
+- **C. 端到端出片实测**：网站生成分镜 → 点「渲染视频」→ 应出 MP4（或配了 R2 出分享链接）。也可直接 `curl -X POST https://render.1go.im/render -d @timeline.json`。
+- **D. 装克隆音色服务**：`cd ~/3c-review-video-studio/voice-clone && bash deploy.sh`（下 cu128 PyTorch + CosyVoice2-0.5B，约 15~25GB，较久）→ 起 :9233 → 隧道里 `voice.1go.im` 自动生效 → Cloudflare Pages 配 `VOICE_CLONE_URL=https://voice.1go.im`。
+
+> 注：命名隧道 `3c-worker` 和它的 DNS（render/voice.1go.im）已存在你 Cloudflare 账号里，**换机器只要重新跑 worker + `cloudflared tunnel run`**（隧道凭证文件 `~/.cloudflared/` 在那台 5060 上；换全新机器需重新 `cloudflared tunnel login` 或拷贝凭证）。**注意：这是「部署 GPU 服务」，跟「换电脑继续写代码」是两回事——写代码只需 clone 仓库看本文档即可。**
+
+---
+
+## 10. 提交规范小抄
 
 - 改前端：`index.html` / `app.js` / `styles.css`。
 - 改生成逻辑：**Cloudflare Function 和 FastAPI 两处要同步改**（`functions/api/*.js` 与 `backend/main.py` 的 prompt 保持一致）。
