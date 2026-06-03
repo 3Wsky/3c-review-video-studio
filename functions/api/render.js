@@ -36,6 +36,7 @@ export async function onRequestPost(context) {
     voice: input.voice || "mimo_default",
     cloneSpkId: input.cloneSpkId || "",
     gpu: input.gpu !== false, // 默认让 worker 用 GPU；worker 端不支持会自动软件渲染
+    autoStock: Boolean(input.autoStock),
     assets: input.assets || undefined
   };
 
@@ -53,19 +54,28 @@ export async function onRequestPost(context) {
     );
   }
 
-  // worker 出错时返回 JSON；成功时返回 video/mp4 二进制，直接透传给前端。
+  // worker 三种返回：
+  //   - JSON 且 ok+url（配了 R2）：成片已传 R2，透传 { ok, url, ... } 给前端（可播/下载/分享）。
+  //   - JSON 出错：转成 { error } 返回。
+  //   - video/mp4 二进制（没配 R2）：直接透传下载。
   const contentType = resp.headers.get("content-type") || "";
-  if (!resp.ok || contentType.includes("application/json")) {
+  if (contentType.includes("application/json")) {
     let payloadJson;
     try {
       payloadJson = await resp.json();
     } catch {
       payloadJson = { error: "渲染服务返回异常", providerStatus: resp.status };
     }
+    if (resp.ok && payloadJson && payloadJson.ok && payloadJson.url) {
+      return jsonResponse(payloadJson, 200);
+    }
     return jsonResponse(
       { error: payloadJson.error || "渲染失败", providerStatus: resp.status },
       resp.ok ? 502 : resp.status
     );
+  }
+  if (!resp.ok) {
+    return jsonResponse({ error: "渲染失败", providerStatus: resp.status }, resp.status);
   }
 
   return new Response(resp.body, {

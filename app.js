@@ -1409,20 +1409,33 @@ async function performRender(data, apiBase, voice) {
       body: JSON.stringify(body)
     });
     const type = response.headers.get("content-type") || "";
-    if (!response.ok || type.includes("application/json")) {
-      let message = "渲染失败";
-      try {
-        const err = await response.json();
-        message = err.error || message;
-      } catch (e) {
-        /* ignore */
+    if (type.includes("application/json")) {
+      const payload = await response.json().catch(() => ({}));
+      // 配了 R2：成片已上传，返回可分享 URL（可播/下载/分享）。
+      if (response.ok && payload.ok && payload.url) {
+        lastRenderUrl = payload.url;
+        showRenderPreview(payload.url, { shareUrl: payload.url, public: payload.public });
+        const mb = payload.bytes ? `${(payload.bytes / 1024 / 1024).toFixed(1)}MB ` : "";
+        setCueHint(
+          payload.public
+            ? `渲染完成 ✓ 成片已存云端（${mb}MP4），下方可播放/下载/复制分享链接。`
+            : `渲染完成 ✓ 成片已存 R2（${mb}MP4）。链接为私有 bucket，需在 worker 配 R2_PUBLIC_BASE 才能公网播放。`
+        );
+        return;
       }
+      // 否则是错误 JSON
+      let message = payload.error || "渲染失败";
       if (response.status === 501) {
         message = "渲染服务未配置：请在后端设置 RENDER_URL 指向你的渲染 worker（见 video-render/README）。";
       } else if (response.status === 502) {
         message = `连不上渲染服务，GPU 机可能没开机：${message}`;
       }
       setCueHint(message);
+      setRenderBtn("渲染视频", false);
+      return;
+    }
+    if (!response.ok) {
+      setCueHint("渲染失败");
       setRenderBtn("渲染视频", false);
       return;
     }
@@ -1442,7 +1455,7 @@ async function performRender(data, apiBase, voice) {
   }
 }
 
-function showRenderPreview(url) {
+function showRenderPreview(url, opts = {}) {
   let host = document.querySelector("#renderPreview");
   if (!host) {
     host = document.createElement("div");
@@ -1461,6 +1474,39 @@ function showRenderPreview(url) {
   video.playsInline = true;
   host.appendChild(title);
   host.appendChild(video);
+
+  // R2 托管成片：给「下载 / 复制分享链接」操作。
+  if (opts.shareUrl) {
+    const bar = document.createElement("div");
+    bar.className = "render-share";
+    const dl = document.createElement("a");
+    dl.className = "icon-button";
+    dl.href = opts.shareUrl;
+    dl.download = `${safeName()}.mp4`;
+    dl.textContent = "下载 MP4";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "icon-button";
+    copy.textContent = "复制分享链接";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(opts.shareUrl);
+        copy.textContent = "已复制 ✓";
+        setTimeout(() => (copy.textContent = "复制分享链接"), 1600);
+      } catch (e) {
+        copy.textContent = opts.shareUrl;
+      }
+    });
+    bar.appendChild(dl);
+    bar.appendChild(copy);
+    if (opts.public === false) {
+      const note = document.createElement("span");
+      note.className = "render-share-note";
+      note.textContent = "（私有链接，配 R2_PUBLIC_BASE 后可公开播放）";
+      bar.appendChild(note);
+    }
+    host.appendChild(bar);
+  }
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
