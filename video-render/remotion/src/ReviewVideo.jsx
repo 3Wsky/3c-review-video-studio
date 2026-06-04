@@ -15,7 +15,13 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { buildComposition, highlightTokens, karaokeFraction } from "./scene-model.mjs";
+import {
+  buildComposition,
+  highlightTokens,
+  karaokeFraction,
+  formatCountUp,
+  metricRingFraction,
+} from "./scene-model.mjs";
 import { layoutFor } from "./layout.mjs";
 import { enter, pulse } from "./anim.mjs";
 
@@ -55,17 +61,7 @@ function goodnessFractions(nums, better) {
   });
 }
 
-// 数字滚动：把 rawStr 里的数值部分从 0 缓动到目标（target），保留前后缀与小数位；
-// 进度 p≥1 时直接还原原始字符串（避免浮点误差/单位丢失）。target 为 null（非数字）→ 原样返回。
-function countUp(rawStr, target, p) {
-  if (target == null) return rawStr;
-  const m = /-?\d+(?:\.\d+)?/.exec(rawStr);
-  if (!m) return rawStr;
-  if (p >= 1) return rawStr;
-  const decimals = (m[0].split(".")[1] || "").length;
-  const shown = (target * p).toFixed(decimals);
-  return rawStr.slice(0, m.index) + shown + rawStr.slice(m.index + m[0].length);
-}
+// 数字滚动统一走 scene-model 的 formatCountUp（纯函数、带单测），渲染内核与网页预览共用。
 
 // 卡拉OK字幕：随本镜进度逐字「点亮」（未念到的字压暗、已念到的全亮、光标处一字宽平滑过渡）。
 // progress ∈ [0,1] 是本镜「念到第几个字」的比例：有 whisper 逐词时间戳时跟真实语音走，否则线性匀速。数字仍保金色高亮。
@@ -221,7 +217,7 @@ function CompareMatrix({ scene, formatKey, localTime }) {
                     transform: win ? `scale(${winPulse})` : undefined,
                   }}
                 >
-                  {hasNum ? countUp(v, nums[i], barP) : v}
+                  {hasNum ? formatCountUp(v, nums[i], barP) : v}
                   {hasNum ? (
                     <div
                       style={{
@@ -258,6 +254,110 @@ function CompareMatrix({ scene, formatKey, localTime }) {
   );
 }
 
+// 数卡/单指标镜：居中进度环 + 大数字滚动入场。
+// 环按 metricRingFraction 从 0 长到目标占比（给了 max 时按 value/max，否则装饰性扫满一圈）；
+// 大数字用 formatCountUp 从 0 滚到目标值，到位时轻微回弹强调。label 在上、caption 在下。
+function MetricCard({ metric, localTime, lay }) {
+  const cardP = enter(localTime, 0.35, 0.5, "power3.out");
+  const ringP = enter(localTime, 0.55, 0.8, "power2.out");
+  const numP = enter(localTime, 0.55, 0.9, "power1.out");
+  const settle = pulse(localTime, 1.45, 0.5, 1.06);
+
+  const size = lay.ring || 360;
+  const stroke = Math.round(size * 0.05);
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const frac = metricRingFraction(metric, ringP);
+  const accent = metric.better === "low" ? "#7ee0c0" : "#ffd166";
+  const rollNum = formatCountUp(metric.valueText, metric.value, numP);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: lay.top,
+        left: 0,
+        right: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 22,
+        opacity: cardP,
+        transform: `translateY(${34 * (1 - cardP)}px)`,
+      }}
+    >
+      {metric.label ? (
+        <div style={{ fontSize: lay.labelSize || 38, color: "#c6cfe6", fontWeight: 600, letterSpacing: 1.5 }}>
+          {metric.label}
+        </div>
+      ) : null}
+
+      <div style={{ position: "relative", width: size, height: size, transform: `scale(${settle})` }}>
+        <svg width={size} height={size} style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }}>
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke={accent}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${circ * frac} ${circ}`}
+          />
+        </svg>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "baseline",
+            justifyContent: "center",
+            color: "#fff",
+          }}
+        >
+          <span style={{ fontSize: lay.valueSize || 132, fontWeight: 800, lineHeight: 1 }}>{rollNum}</span>
+          {metric.unit ? (
+            <span style={{ fontSize: lay.unitSize || 48, fontWeight: 700, color: accent, marginLeft: 8 }}>{metric.unit}</span>
+          ) : null}
+        </div>
+        {metric.max != null ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: size * 0.18,
+              textAlign: "center",
+              fontSize: 28,
+              color: "#8d97b4",
+              fontWeight: 600,
+            }}
+          >
+            / {metric.max}
+            {metric.unit}
+          </div>
+        ) : null}
+      </div>
+
+      {metric.caption ? (
+        <div
+          style={{
+            fontSize: lay.captionSize || 38,
+            color: "#aeb6cf",
+            fontWeight: 500,
+            textAlign: "center",
+            maxWidth: "82%",
+            lineHeight: 1.4,
+          }}
+        >
+          {metric.caption}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Scene({ scene, formatKey, assetMap }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -286,6 +386,7 @@ function Scene({ scene, formatKey, assetMap }) {
   const badgeLay = layoutFor(formatKey, "badge");
   const citeLay = layoutFor(formatKey, "cite");
   const stockLay = layoutFor(formatKey, "stock");
+  const metricLay = layoutFor(formatKey, "metric");
 
   return (
     <AbsoluteFill>
@@ -361,11 +462,11 @@ function Scene({ scene, formatKey, assetMap }) {
               transform: `translateY(${44 * (1 - titleP)}px)`,
             }}
           >
-            {scene.headline}
+            {formatCountUp(scene.headline, null, titleP)}
           </div>
         ) : null}
 
-        {!scene.compare && scene.detail ? (
+        {!scene.compare && !scene.metric && scene.detail ? (
           <div
             style={{
               position: "absolute",
@@ -388,6 +489,10 @@ function Scene({ scene, formatKey, assetMap }) {
 
         {scene.compare ? (
           <CompareMatrix scene={scene} formatKey={formatKey} localTime={t} />
+        ) : null}
+
+        {!scene.compare && scene.metric ? (
+          <MetricCard metric={scene.metric} localTime={t} lay={metricLay} />
         ) : null}
 
         {scene.subtitle ? (
