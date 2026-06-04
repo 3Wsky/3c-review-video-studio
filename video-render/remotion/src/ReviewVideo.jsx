@@ -15,7 +15,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { buildComposition, highlightTokens } from "./scene-model.mjs";
+import { buildComposition, highlightTokens, karaokeFraction } from "./scene-model.mjs";
 import { layoutFor } from "./layout.mjs";
 import { enter, pulse } from "./anim.mjs";
 
@@ -68,7 +68,7 @@ function countUp(rawStr, target, p) {
 }
 
 // 卡拉OK字幕：随本镜进度逐字「点亮」（未念到的字压暗、已念到的全亮、光标处一字宽平滑过渡）。
-// progress ∈ [0,1] 是本镜「念到第几个字」的比例（时间正比，不依赖音频）。数字仍保持金色高亮。
+// progress ∈ [0,1] 是本镜「念到第几个字」的比例：有 whisper 逐词时间戳时跟真实语音走，否则线性匀速。数字仍保金色高亮。
 function SubtitleKaraoke({ text, progress }) {
   const tokens = highlightTokens(text);
   const chars = [];
@@ -272,9 +272,11 @@ function Scene({ scene, formatKey, assetMap }) {
   const titleP = enter(t, 0.25, 0.7, "power3.out");
   const detailP = enter(t, 0.45, 0.6, "power2.out");
   const subP = enter(t, 0.55, 0.5, "power2.out");
-  // 卡拉OK逐字点亮：淡入后开始（0.7s），到本镜结束前留 0.35s 收尾；时长过短则至少扫 0.4s。线性匀速。
+  // 卡拉OK逐字点亮：优先用 whisper 逐词对齐时间戳跟着真实语音走；
+  // 没有 captions 时回退线性匀速（淡入后 0.7s 起、结束前留 0.35s 收尾、过短至少扫 0.4s）。
+  const realK = karaokeFraction(scene.captions, t * 1000);
   const karaokeSpan = Math.max(0.4, scene.duration - 0.35 - 0.7);
-  const karaokeP = enter(t, 0.7, karaokeSpan, "linear");
+  const karaokeP = realK == null ? enter(t, 0.7, karaokeSpan, "linear") : realK;
   const citeP = enter(t, 0.7, 0.5, "power1.out");
   const stockP = enter(t, 0.4, 0.5, "power1.out");
 

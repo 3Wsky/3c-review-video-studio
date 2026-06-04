@@ -52,6 +52,17 @@ node render.mjs --in ../samples/timeline.sample.json --out out.mp4 --format 16:9
 `render.mjs` 产出的是**无声视频**：音频仍由外层 worker（逐镜 TTS + ffmpeg 混音）负责，
 所以「换引擎」只换画面渲染，配音/时长校准/R2 上传等流程完全不变。
 
+## 逐词对齐字幕（whisper）
+
+底部字幕做「卡拉OK逐字点亮」。两种节奏：
+
+- **真·逐词对齐**：worker 用 whisper.cpp（`whisper.mjs`，本地离线、免费）转写每镜配音，拿到词级时间戳写回 `timeline[].captions`（`[{ fromMs, toMs }]`，相对镜起点）；字幕据此跟着真实语音走，连停顿都会停。
+- **线性回退**：没有 `captions` 时（如网页 `<Player>` 预览本身无音频），字幕按本镜时长匀速点亮。
+
+进度计算是共享纯函数 `karaokeFraction(captions, tMs)`（见 `scene-model.mjs`，每个 token 等权、区间内插值、停顿不前进），渲染内核与网页预览共用。
+
+whisper.cpp 二进制与模型（base，~148MB）首次用时由 `@remotion/install-whisper-cpp` **懒安装**到 `remotion/whisper.cpp/`（已 gitignore，不入库）。worker 侧默认对 `engine=remotion` 开启；设 `WHISPER_CAPTIONS=0` 可关闭（退回线性）。
+
 ## 在 worker 里启用
 
 `video-render/worker.mjs` 的 `/render` 接口收 `engine` 字段：

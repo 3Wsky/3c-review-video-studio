@@ -3,3 +3,7 @@ out.mp4
 *.mp4
 .remotion/
 dist/
+
+# whisper.cpp 二进制与模型（按需本地安装，不入库）
+whisper.cpp/
+*.16k.wav

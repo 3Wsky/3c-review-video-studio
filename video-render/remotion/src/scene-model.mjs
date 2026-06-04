@@ -121,6 +121,37 @@ function round(n) {
   return Math.round(n * 1000) / 1000;
 }
 
+// 归一化「逐词对齐」时间戳：whisper 转写得到的 token 级 [{ fromMs, toMs }]（相对该镜起点）。
+// 只保留有效区间并按 fromMs 排序；无有效项返回 null（上层回退到线性匀速点亮）。
+export function normalizeCaptions(raw) {
+  if (!Array.isArray(raw)) return null;
+  const caps = raw
+    .map((c) => ({ fromMs: Number(c?.fromMs), toMs: Number(c?.toMs) }))
+    .filter((c) => Number.isFinite(c.fromMs) && Number.isFinite(c.toMs) && c.toMs >= c.fromMs)
+    .sort((a, b) => a.fromMs - b.fromMs);
+  return caps.length ? caps : null;
+}
+
+// 卡拉OK进度：给定 token 时间戳与当前时刻 tMs，返回「已念完的比例」∈[0,1]。
+// 每个 token 等权（只取节奏，不看文字——whisper 中文 token 常是字节碎片）：
+// 已过 toMs 记 1，正处于 [fromMs,toMs) 按时间线性插值，停顿（gap）期间保持不前进。
+export function karaokeFraction(captions, tMs) {
+  if (!Array.isArray(captions) || captions.length === 0) return null;
+  const total = captions.length;
+  let done = 0;
+  for (const c of captions) {
+    if (tMs >= c.toMs) {
+      done += 1;
+    } else if (tMs > c.fromMs) {
+      done += (tMs - c.fromMs) / Math.max(1, c.toMs - c.fromMs);
+      break;
+    } else {
+      break; // tMs <= fromMs：还没念到这个 token，保持当前进度
+    }
+  }
+  return Math.max(0, Math.min(1, done / total));
+}
+
 // ---------- 核心：把 Timeline 归一化成分镜数组 ----------
 //
 // 返回 { scenes, totalSeconds }，每镜：
@@ -149,6 +180,8 @@ export function normalizeScenes(timeline) {
       cite: String(visual.cite || scene?.cite || "").trim(),
       stock: visual.assetSource === "stock",
       compare: normalizeCompare(visual.compare || scene?.compare),
+      // 逐词对齐时间戳（worker 用 whisper 转写配音后写回）；无则字幕回退线性点亮。
+      captions: normalizeCaptions(scene?.captions),
     };
   });
 }
