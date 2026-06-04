@@ -93,6 +93,8 @@ export function normalizeCompare(raw) {
         unit: String(row?.unit || "").trim(),
         better,
         values: values.map((v) => String(v == null ? "" : v).trim()),
+        // 解析出的数值（非数字 → null），供渲染层做条形增长/数字滚动等数据可视化动效。
+        nums: nums.map((n) => (Number.isFinite(n) ? n : null)),
         winner,
       };
     })
