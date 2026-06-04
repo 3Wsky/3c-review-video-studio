@@ -16,7 +16,7 @@ remotion/
     scene-model.mjs   共享分镜模型（纯 JS，无 React）：归一化 Timeline、横评胜者判定、字幕数字高亮 token
     layout.mjs        各元素定位/字号（复刻 build.mjs 的 CSS，按画幅覆盖）
     anim.mjs          把 GSAP 的「入场 from」翻译成基于帧的插值
-    ReviewVideo.jsx   主合成 + Scene/Highlight/CompareMatrix 组件
+    ReviewVideo.jsx   主合成 + Scene/Highlight/CompareMatrix/MetricCard 组件
     Root.jsx          注册 Composition（用 calculateMetadata 从 props 推导画幅/时长）
     index.jsx         registerRoot 入口
   render.mjs          程序化渲染入口（worker 调它出无声视频）
@@ -62,6 +62,19 @@ node render.mjs --in ../samples/timeline.sample.json --out out.mp4 --format 16:9
 进度计算是共享纯函数 `karaokeFraction(captions, tMs)`（见 `scene-model.mjs`，每个 token 等权、区间内插值、停顿不前进），渲染内核与网页预览共用。
 
 whisper.cpp 二进制与模型（base，~148MB）首次用时由 `@remotion/install-whisper-cpp` **懒安装**到 `remotion/whisper.cpp/`（已 gitignore，不入库）。worker 侧默认对 `engine=remotion` 开启；设 `WHISPER_CAPTIONS=0` 可关闭（退回线性）。
+
+## 数卡/单指标镜入场动效（数字滚动 + 进度环）
+
+普通分镜里关键数字做「入场动效」，和横评矩阵那套（条形增长 + 数字滚动）一致地由共享纯函数驱动：
+
+- **标题数字滚动**（自动）：任意分镜的 `headline` 里第一个数值在入场时从 0 缓动到目标（如「机身重量 199 克」→ 199 滚上来）。走 `formatCountUp(str, target, p)`（`scene-model.mjs`，`target=null` 时自动取串里的数），横评格也复用同一函数。
+- **数据卡 + 进度环**（结构化，opt-in）：分镜带 `visual.metric` 时，居中渲染大数字滚动 + 圆形进度环。
+  - 字段：`{ value, unit, label, caption, max, min, better }`。`value` 必填且可解析为数值。
+  - 给了 `max`（且 `>min`，`min` 默认 0）时进度环按 `(value-min)/(max-min)` 占比填充，并显示「/ max 单位」；缺省则环退化为「入场扫满一圈」的装饰。
+  - `better: "low"`（越小越好，如降噪 -45dB）只改强调色（青绿），不改占比。
+  - 进度环占比走 `metricRingFraction(metric, p)`，随入场 `p` 从 0 长到目标占比。
+
+`visual.metric` 存在时该镜不再渲染普通 `detail` 文本（数据卡的 `caption` 取而代之）。渲染内核与网页 `<Player>` 预览共用同一套组件/纯函数，两边像素一致。
 
 ## 在 worker 里启用
 

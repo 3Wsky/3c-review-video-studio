@@ -7,6 +7,9 @@ import {
   normalizeCaptions,
   karaokeFraction,
   highlightTokens,
+  formatCountUp,
+  normalizeMetric,
+  metricRingFraction,
   buildComposition,
   resolveFormat,
   FPS,
@@ -132,6 +135,66 @@ test("normalizeScenes 透传逐词时间戳 captions（无效 → null）", () =
   });
   assert.deepEqual(s[0].captions, [{ fromMs: 0, toMs: 120 }]);
   assert.equal(s[1].captions, null);
+});
+
+test("formatCountUp 数字滚动：自动取目标、保留前后缀小数位、到位还原", () => {
+  // target=null → 自动取串里的数为目标
+  assert.equal(formatCountUp("12 小时", null, 0), "0 小时"); // 起点 0
+  assert.equal(formatCountUp("12 小时", null, 0.5), "6 小时"); // 半程
+  assert.equal(formatCountUp("12 小时", null, 1), "12 小时"); // 到位还原原串
+  // 显式 target（横评格用）：原串无小数位 → 整数显示
+  assert.equal(formatCountUp("3999元", 3999, 0.5), "2000元"); // (3999*0.5).toFixed(0)
+  // 小数位跟随原串
+  assert.equal(formatCountUp("4.5kg", null, 0), "0.0kg");
+  assert.equal(formatCountUp("4.5kg", null, 1), "4.5kg");
+  // 无数字/非数目标 → 原样
+  assert.equal(formatCountUp("买它就对了", null, 0.3), "买它就对了");
+  assert.equal(formatCountUp("12", "x", 0.3), "12");
+});
+
+test("normalizeMetric 解析数卡数据：value 必需、max>min 才有占比 frac", () => {
+  const m = normalizeMetric({ value: "12", unit: "小时", label: "实测续航", max: 16, caption: "混合使用" });
+  assert.equal(m.value, 12);
+  assert.equal(m.valueText, "12");
+  assert.equal(m.unit, "小时");
+  assert.equal(m.label, "实测续航");
+  assert.equal(m.max, 16);
+  assert.equal(m.frac, 12 / 16); // (12-0)/(16-0)
+  // 无 max → frac=null（环装饰性扫满）
+  const m2 = normalizeMetric({ value: "45", unit: "dB" });
+  assert.equal(m2.max, null);
+  assert.equal(m2.frac, null);
+  // min/max 都给 → 区间归一化
+  const m3 = normalizeMetric({ value: 8, min: 4, max: 12 });
+  assert.equal(m3.frac, (8 - 4) / (12 - 4));
+  // value 非数 → null
+  assert.equal(normalizeMetric({ value: "无" }), null);
+  assert.equal(normalizeMetric(null), null);
+  assert.equal(normalizeMetric([1, 2]), null);
+});
+
+test("metricRingFraction 环占比随入场 p 增长，到位封顶目标占比", () => {
+  const m = normalizeMetric({ value: 12, max: 16 }); // 目标 0.75
+  assert.equal(metricRingFraction(m, 0), 0);
+  assert.equal(metricRingFraction(m, 0.5), 0.375); // 0.75*0.5
+  assert.equal(metricRingFraction(m, 1), 0.75);
+  assert.equal(metricRingFraction(m, 2), 0.75); // p 钳制到 1
+  // 无 max → 目标占比 1（装饰满环）
+  const m2 = normalizeMetric({ value: 45 });
+  assert.equal(metricRingFraction(m2, 1), 1);
+  assert.equal(metricRingFraction(null, 1), 0);
+});
+
+test("normalizeScenes 透传数卡 metric（visual.metric → null 当无效）", () => {
+  const s = normalizeScenes({
+    timeline: [
+      { duration: 5, visual: { headline: "续航", metric: { value: "12", unit: "小时", max: 16 } } },
+      { duration: 5, visual: { headline: "x" } }, // 无 metric
+    ],
+  });
+  assert.equal(s[0].metric.value, 12);
+  assert.equal(s[0].metric.frac, 0.75);
+  assert.equal(s[1].metric, null);
 });
 
 test("buildComposition 推导画幅与总帧数", () => {

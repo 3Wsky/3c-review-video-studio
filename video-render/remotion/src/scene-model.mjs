@@ -121,6 +121,55 @@ function round(n) {
   return Math.round(n * 1000) / 1000;
 }
 
+// 数字滚动：把字符串里第一个数值从 0 缓动到目标（保留前后缀、单位与小数位）。
+// target 为 null 时自动取字符串里的数为目标；p>=1 直接还原原串（避免浮点/单位误差）；
+// 无数字或目标非数 → 原样返回。渲染内核与网页预览共用，CompareMatrix / 数卡 / 标题滚动都走这。
+export function formatCountUp(rawStr, target, p) {
+  const str = String(rawStr == null ? "" : rawStr);
+  const m = /-?\d+(?:\.\d+)?/.exec(str);
+  if (!m) return str;
+  const tgt = target == null ? Number(m[0]) : Number(target);
+  if (!Number.isFinite(tgt)) return str;
+  if (p >= 1) return str;
+  const decimals = (m[0].split(".")[1] || "").length;
+  const shown = (tgt * Math.max(0, Math.min(1, p))).toFixed(decimals);
+  return str.slice(0, m.index) + shown + str.slice(m.index + m[0].length);
+}
+
+// 数卡/单指标镜的结构化数据（visual.metric）→ 渲染层据此做「数字滚动 + 进度环」入场动效。
+// 形如 { value, unit, label, caption, max, min, better }；value 必须可解析为数值，否则返回 null。
+// 给了 max(>min) 时进度环按 (value-min)/(max-min) 占比填充（frac）；缺省则 frac=null，
+// 环退化为「入场扫满一圈」的装饰（仍配数字滚动）。better 仅用于强调色语义，不改占比。
+export function normalizeMetric(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = toNumber(raw.value);
+  if (!Number.isFinite(value)) return null;
+  const valueText = String(raw.value == null ? value : raw.value).trim() || String(value);
+  const minRaw = toNumber(raw.min);
+  const min = Number.isFinite(minRaw) ? minRaw : 0;
+  const maxRaw = toNumber(raw.max);
+  const hasMax = Number.isFinite(maxRaw) && maxRaw > min;
+  const frac = hasMax ? Math.max(0, Math.min(1, (value - min) / (maxRaw - min))) : null;
+  return {
+    value,
+    valueText,
+    unit: String(raw.unit || "").trim(),
+    label: String(raw.label || "").trim(),
+    caption: String(raw.caption || "").trim(),
+    min,
+    max: hasMax ? maxRaw : null,
+    better: raw.better === "low" ? "low" : "high",
+    frac,
+  };
+}
+
+// 进度环/条入场占比：随入场进度 p 从 0 长到目标占比；无 max（frac=null）时退化为装饰性满环。
+export function metricRingFraction(metric, p) {
+  if (!metric) return 0;
+  const target = metric.frac == null ? 1 : metric.frac;
+  return Math.max(0, Math.min(1, target * Math.max(0, Math.min(1, p))));
+}
+
 // 归一化「逐词对齐」时间戳：whisper 转写得到的 token 级 [{ fromMs, toMs }]（相对该镜起点）。
 // 只保留有效区间并按 fromMs 排序；无有效项返回 null（上层回退到线性匀速点亮）。
 export function normalizeCaptions(raw) {
@@ -180,6 +229,8 @@ export function normalizeScenes(timeline) {
       cite: String(visual.cite || scene?.cite || "").trim(),
       stock: visual.assetSource === "stock",
       compare: normalizeCompare(visual.compare || scene?.compare),
+      // 数卡/单指标镜的进度环数据（visual.metric）；无则不渲染数据卡。
+      metric: normalizeMetric(visual.metric || scene?.metric),
       // 逐词对齐时间戳（worker 用 whisper 转写配音后写回）；无则字幕回退线性点亮。
       captions: normalizeCaptions(scene?.captions),
     };
