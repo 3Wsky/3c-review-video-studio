@@ -45,6 +45,18 @@ test("normalizeCompare 按 better 判每行胜者，并列记 -1", () => {
   assert.equal(c.verdict, -1);
 });
 
+test("normalizeCompare 行附带解析数值 nums（非数字 → null）", () => {
+  const c = normalizeCompare({
+    products: ["A", "B"],
+    rows: [
+      { label: "续航", unit: "小时", better: "high", values: ["12 小时", "14"] },
+      { label: "备注", better: "high", values: ["无", "—"] },
+    ],
+  });
+  assert.deepEqual(c.rows[0].nums, [12, 14]); // 从 "12 小时" 抽出 12
+  assert.deepEqual(c.rows[1].nums, [null, null]); // 非数字 → null
+});
+
 test("normalizeCompare 综合胜者 = 行胜最多", () => {
   const c = normalizeCompare({
     products: ["A", "B"],

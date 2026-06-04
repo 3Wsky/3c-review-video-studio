@@ -1910,3 +1910,78 @@ textarea:focus {
   border-color: color-mix(in srgb, var(--amber) 50%, var(--line));
   color: var(--amber);
 }
+
+/* ---- Remotion <Player> 实时预览侧栏（右侧停靠，不挡左侧编辑器）---- */
+.remotion-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 80;
+  width: min(440px, 42vw);
+  height: 100vh;
+  padding: 14px;
+  box-sizing: border-box;
+}
+.remotion-drawer[hidden] { display: none; }
+/* 打开时给页面右侧留出空间，避免遮挡内容 */
+body.remotion-open { padding-right: min(440px, 42vw); }
+.remotion-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.remotion-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.remotion-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.remotion-modal-title svg { width: 18px; height: 18px; color: var(--accent); }
+.remotion-modal-title small {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12.5px;
+  margin-left: 2px;
+}
+.remotion-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(177, 107, 255, 0.10), transparent 60%),
+    #05050b;
+  padding: 14px;
+}
+/* Player 自身按合成宽高比做信箱式适配并居中，给个确定高度即可 */
+.remotion-stage > div { width: 100%; height: 100%; }
+.remotion-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.remotion-modal-tip {
+  margin: 0;
+  padding: 10px 16px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  border-top: 1px solid var(--line);
+}

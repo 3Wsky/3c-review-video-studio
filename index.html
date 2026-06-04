@@ -214,6 +214,9 @@
               <button class="icon-button render-btn" id="renderVideoBtn" type="button" title="把当前分镜渲染成 MP4（需配置渲染 worker RENDER_URL）">
                 <i data-lucide="clapperboard"></i><span>渲染视频</span>
               </button>
+              <button class="icon-button" id="remotionPreviewBtn" type="button" title="用 Remotion <Player> 在网页内实时预览当前分镜（无需后端渲染）">
+                <i data-lucide="play-circle"></i><span>实时预览</span>
+              </button>
             </div>
             <button class="icon-button" id="exportPosterBtn" type="button" title="一次产出封面图 + 小红书图文版（抽静帧 + 文案，不出视频，很快）">
               <i data-lucide="image"></i><span>图文/封面</span>
@@ -297,6 +300,26 @@
     </main>
 
     <pre id="jsonOutput" hidden></pre>
+
+    <!-- Remotion <Player> 实时预览侧栏（不挡编辑器：改文案/时长/排序边改边看，按需懒加载 assets/remotion-player.js） -->
+    <aside class="remotion-drawer" id="remotionModal" hidden aria-label="Remotion 实时预览">
+      <div class="remotion-dialog">
+        <div class="remotion-modal-head">
+          <div class="remotion-modal-title">
+            <i data-lucide="play-circle"></i>
+            <span>实时预览 · Remotion</span>
+            <small id="remotionFormatNote"></small>
+          </div>
+          <button class="square-button" id="remotionCloseBtn" type="button" title="关闭预览">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="remotion-stage" id="remotionPlayerHost">
+          <div class="remotion-loading" id="remotionLoading">正在加载预览引擎…</div>
+        </div>
+        <p class="remotion-modal-tip">和「渲染视频」用同一套 Remotion 模板，左侧改文案/时长/排序即时刷新，不用跑后端。</p>
+      </div>
+    </aside>
 
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script src="./app.js"></script>

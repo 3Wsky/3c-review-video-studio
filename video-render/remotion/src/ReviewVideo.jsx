@@ -40,7 +40,35 @@ function Highlight({ text }) {
   );
 }
 
+// 一行内把数值归一化成「越好越满」的条形比例 ∈ [0,1]：
+// better=high → 越大越满；better=low → 越小越满。无有效差异（全相等/缺数）→ 都给满。
+function goodnessFractions(nums, better) {
+  const finite = nums.filter((n) => typeof n === "number" && Number.isFinite(n));
+  if (finite.length === 0) return nums.map(() => 0);
+  const min = Math.min(...finite);
+  const max = Math.max(...finite);
+  const span = max - min;
+  return nums.map((n) => {
+    if (typeof n !== "number" || !Number.isFinite(n)) return 0;
+    if (span <= 0) return 1; // 全相等：都给满条
+    return better === "low" ? (max - n) / span : (n - min) / span;
+  });
+}
+
+// 数字滚动：把 rawStr 里的数值部分从 0 缓动到目标（target），保留前后缀与小数位；
+// 进度 p≥1 时直接还原原始字符串（避免浮点误差/单位丢失）。target 为 null（非数字）→ 原样返回。
+function countUp(rawStr, target, p) {
+  if (target == null) return rawStr;
+  const m = /-?\d+(?:\.\d+)?/.exec(rawStr);
+  if (!m) return rawStr;
+  if (p >= 1) return rawStr;
+  const decimals = (m[0].split(".")[1] || "").length;
+  const shown = (target * p).toFixed(decimals);
+  return rawStr.slice(0, m.index) + shown + rawStr.slice(m.index + m[0].length);
+}
+
 // 横评对比矩阵：表头（综合胜者带皇冠高亮）+ 每行一个维度（胜者格金色 ✓）。
+// 数值格带「条形增长 + 数字滚动」入场动效：随该行 stagger 揭晓，条按归一化优度长出、数字从 0 滚到位。
 function CompareMatrix({ scene, formatKey, localTime }) {
   const c = scene.compare;
   const lay = layoutFor(formatKey, "compare");
@@ -118,6 +146,10 @@ function CompareMatrix({ scene, formatKey, localTime }) {
       {/* 维度行 */}
       {c.rows.map((row, r) => {
         const p = enter(localTime, 0.55 + r * 0.22, 0.45, "power2.out");
+        // 条形/数字稍晚于该行滑入再增长，做出「先到位、再读数」的节奏感。
+        const barP = enter(localTime, 0.55 + r * 0.22 + 0.12, 0.5, "power2.out");
+        const nums = Array.isArray(row.nums) ? row.nums : [];
+        const fracs = goodnessFractions(nums, row.better);
         return (
           <div
             key={r}
@@ -148,12 +180,16 @@ function CompareMatrix({ scene, formatKey, localTime }) {
             </div>
             {row.values.map((v, i) => {
               const win = i === row.winner;
+              const hasNum = typeof nums[i] === "number" && Number.isFinite(nums[i]);
+              const fillW = Math.max(0, Math.min(1, fracs[i])) * barP * 100;
               return (
                 <div
                   key={i}
                   style={{
                     ...cellBase,
                     position: "relative",
+                    overflow: "hidden",
+                    paddingBottom: 30,
                     color: win ? "#20231a" : "#eef0f6",
                     background: win ? "#ffd166" : "rgba(255,255,255,0.06)",
                     borderColor: win ? "#ffd166" : "rgba(255,255,255,0.10)",
@@ -161,7 +197,30 @@ function CompareMatrix({ scene, formatKey, localTime }) {
                     transform: win ? `scale(${winPulse})` : undefined,
                   }}
                 >
-                  {v}
+                  {hasNum ? countUp(v, nums[i], barP) : v}
+                  {hasNum ? (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 12,
+                        right: 12,
+                        bottom: 12,
+                        height: 8,
+                        borderRadius: 5,
+                        background: win ? "rgba(20,40,16,0.16)" : "rgba(255,255,255,0.10)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${fillW}%`,
+                          height: "100%",
+                          borderRadius: 5,
+                          background: win ? "#1f3a14" : "rgba(130,158,255,0.95)",
+                        }}
+                      />
+                    </div>
+                  ) : null}
                   {win ? (
                     <i style={{ position: "absolute", top: 6, right: 12, fontSize: 24, fontStyle: "normal", color: "#1a3a1a" }}>✓</i>
                   ) : null}
