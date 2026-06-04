@@ -79,6 +79,11 @@ const els = {
   exportShotlistBtn: document.querySelector("#exportShotlistBtn"),
   renderVideoBtn: document.querySelector("#renderVideoBtn"),
   renderFormat: document.querySelector("#renderFormat"),
+  remotionPreviewBtn: document.querySelector("#remotionPreviewBtn"),
+  remotionModal: document.querySelector("#remotionModal"),
+  remotionCloseBtn: document.querySelector("#remotionCloseBtn"),
+  remotionPlayerHost: document.querySelector("#remotionPlayerHost"),
+  remotionFormatNote: document.querySelector("#remotionFormatNote"),
   exportPosterBtn: document.querySelector("#exportPosterBtn"),
   stockQuery: document.querySelector("#stockQuery"),
   stockSearchBtn: document.querySelector("#stockSearchBtn"),
@@ -1031,6 +1036,7 @@ function renderClipEditor(data) {
   const liveUpdate = () => {
     renderTrack(initialState.timeline);
     renderPreview(initialState.timeline);
+    refreshRemotionPreviewIfOpen();
   };
 
   const ceTitle = els.clipEditor.querySelector("#ceTitle");
@@ -1203,6 +1209,7 @@ function renderAll(rebuild = true) {
   renderJson(initialState.timeline);
   if (window.lucide) window.lucide.createIcons();
   saveDraft();
+  refreshRemotionPreviewIfOpen();
 }
 
 function setLayout(layout) {
@@ -1511,6 +1518,107 @@ function showRenderPreview(url, opts = {}) {
     host.appendChild(bar);
   }
   host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/* ---- Remotion <Player> 网页实时预览（和「渲染视频」同一套模板，无需后端）---- */
+let remotionHandle = null;
+let remotionScriptPromise = null;
+let remotionRefreshTimer = null;
+
+// 懒加载打包好的预览引擎（assets/remotion-player.js，仅首次打开预览时加载）
+function loadRemotionPlayerScript() {
+  if (window.Mount3CRemotionPlayer) return Promise.resolve();
+  if (remotionScriptPromise) return remotionScriptPromise;
+  remotionScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "./assets/remotion-player.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      remotionScriptPromise = null;
+      reject(new Error("加载预览引擎失败"));
+    };
+    document.head.appendChild(script);
+  });
+  return remotionScriptPromise;
+}
+
+// 把当前 Timeline + 画幅 + 上传图整理成 <Player> 的 props。
+// 上传了图就按镜号循环分配（和右侧手机预览取图逻辑一致），没图则纯渐变背景。
+function buildRemotionProps() {
+  const data = currentTimeline();
+  const format = (els.renderFormat && els.renderFormat.value) || "9:16";
+  const scenes = Array.isArray(data.timeline) ? data.timeline : [];
+  const imgs = initialState.assets.filter((a) => a.type && a.type.startsWith("image/") && a.url);
+  const assetMap = {};
+  let timeline = data;
+  if (imgs.length) {
+    const rewritten = scenes.map((scene, i) => {
+      const key = `__preview_asset_${i}`;
+      assetMap[key] = imgs[i % imgs.length].url;
+      return { ...scene, visual: { ...(scene.visual || {}), asset: key } };
+    });
+    timeline = { ...data, timeline: rewritten };
+  }
+  return { timeline, format, assetMap };
+}
+
+function updateRemotionFormatNote(format) {
+  if (!els.remotionFormatNote) return;
+  const map = { "9:16": "竖屏 1080×1920", "16:9": "横屏 1920×1080", "1:1": "方图 1080×1080" };
+  els.remotionFormatNote.textContent = map[format] || "";
+}
+
+async function openRemotionPreview() {
+  const data = currentTimeline();
+  if (!data.timeline || !data.timeline.length) {
+    setCueHint("还没有分镜可预览，先生成脚本。");
+    return;
+  }
+  els.remotionModal.removeAttribute("hidden");
+  document.body.classList.add("remotion-open");
+  const loading = document.querySelector("#remotionLoading");
+  try {
+    await loadRemotionPlayerScript();
+  } catch (e) {
+    if (loading) loading.textContent = "加载预览引擎失败：请确认 assets/remotion-player.js 已部署。";
+    return;
+  }
+  // 弹层可能在加载期间被关掉
+  if (els.remotionModal.hasAttribute("hidden")) return;
+  els.remotionPlayerHost.innerHTML = "";
+  const props = buildRemotionProps();
+  updateRemotionFormatNote(props.format);
+  try {
+    remotionHandle = window.Mount3CRemotionPlayer(els.remotionPlayerHost, props);
+    if (window.lucide) window.lucide.createIcons();
+  } catch (e) {
+    els.remotionPlayerHost.innerHTML = `<div class="remotion-loading">预览渲染出错：${e.message || e}</div>`;
+  }
+}
+
+function closeRemotionPreview() {
+  if (!els.remotionModal || els.remotionModal.hasAttribute("hidden")) return;
+  els.remotionModal.setAttribute("hidden", "");
+  document.body.classList.remove("remotion-open");
+  if (remotionHandle) {
+    try { remotionHandle.unmount(); } catch (e) { /* noop */ }
+    remotionHandle = null;
+  }
+  els.remotionPlayerHost.innerHTML =
+    '<div class="remotion-loading" id="remotionLoading">正在加载预览引擎…</div>';
+}
+
+// 编辑分镜后，若预览弹层开着则防抖刷新（改文案/时长/排序即时反映）
+function refreshRemotionPreviewIfOpen() {
+  if (!remotionHandle || !els.remotionModal || els.remotionModal.hasAttribute("hidden")) return;
+  clearTimeout(remotionRefreshTimer);
+  remotionRefreshTimer = setTimeout(() => {
+    if (!remotionHandle) return;
+    const props = buildRemotionProps();
+    updateRemotionFormatNote(props.format);
+    remotionHandle.update(props);
+  }, 400);
 }
 
 /* ---- 多端裁剪：封面 + 小红书图文版（抽静帧 + 文案，不出视频）---- */
@@ -2396,6 +2504,7 @@ function bindEvents() {
       }));
       renderAssets();
       renderPreview(initialState.timeline);
+      refreshRemotionPreviewIfOpen();
     });
   }
 
@@ -2443,6 +2552,15 @@ function bindEvents() {
   if (els.exportShotlistBtn) els.exportShotlistBtn.addEventListener("click", () => { exportShotlist(); closeExportMenu(); });
 
   if (els.renderVideoBtn) els.renderVideoBtn.addEventListener("click", renderVideo);
+  if (els.remotionPreviewBtn) els.remotionPreviewBtn.addEventListener("click", openRemotionPreview);
+  if (els.remotionCloseBtn) els.remotionCloseBtn.addEventListener("click", closeRemotionPreview);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && els.remotionModal && !els.remotionModal.hasAttribute("hidden")) {
+      closeRemotionPreview();
+    }
+  });
+  // 切换输出画幅时，预览开着就同步刷新
+  if (els.renderFormat) els.renderFormat.addEventListener("change", refreshRemotionPreviewIfOpen);
   if (els.exportPosterBtn) els.exportPosterBtn.addEventListener("click", exportPoster);
   if (els.stockSearchBtn) els.stockSearchBtn.addEventListener("click", searchStock);
   if (els.compareInsertBtn) els.compareInsertBtn.addEventListener("click", insertCompareScene);
