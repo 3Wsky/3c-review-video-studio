@@ -547,7 +547,9 @@ function normalizeTimelineData(data) {
         layout: scene.visual?.layout || project.layout,
         headline: scene.visual?.headline || fallback.visual.headline,
         detail: scene.visual?.detail || fallback.visual.detail,
-        asset: scene.visual?.asset || fallback.visual.asset
+        asset: scene.visual?.asset || fallback.visual.asset,
+        ...(scene.visual?.metric && typeof scene.visual.metric === "object" ? { metric: scene.visual.metric } : {}),
+        ...(scene.visual?.compare && typeof scene.visual.compare === "object" ? { compare: scene.visual.compare } : {})
       },
       checks: Array.isArray(scene.checks) ? scene.checks : fallback.checks,
       source: scene.source || "Cloudflare LLM"
@@ -988,6 +990,7 @@ function renderClipEditor(data) {
     els.clipEditor.innerHTML = "";
     return;
   }
+  const mv = scene.visual.metric || {};
 
   els.clipEditor.innerHTML = `
     <div class="ce-head">
@@ -1016,6 +1019,38 @@ function renderClipEditor(data) {
       <span>画面说明</span>
       <input id="ceDetail" type="text" value="${escapeHtml(scene.visual.detail)}" />
     </label>
+    <details class="ce-metric"${scene.visual.metric ? " open" : ""}>
+      <summary>数据卡（可选）· 数字滚动 + 进度环</summary>
+      <p class="ce-metric-hint">填「指标值」即给这一镜渲数据卡（大数字从 0 滚到目标 + 进度环）；留空则保持普通分镜。给「上限」按占比填环，不给则环装饰性扫满一圈。</p>
+      <div class="ce-grid">
+        <label class="ce-field">
+          <span>指标值</span>
+          <input id="ceMetricValue" type="text" placeholder="如 12" value="${escapeHtml(mv.value != null ? String(mv.value) : "")}" />
+        </label>
+        <label class="ce-field">
+          <span>单位</span>
+          <input id="ceMetricUnit" type="text" placeholder="如 小时 / % / dB" value="${escapeHtml(mv.unit || "")}" />
+        </label>
+      </div>
+      <div class="ce-grid">
+        <label class="ce-field">
+          <span>上限 max（可选）</span>
+          <input id="ceMetricMax" type="number" step="any" placeholder="如 16" value="${escapeHtml(mv.max != null ? String(mv.max) : "")}" />
+        </label>
+        <label class="ce-field">
+          <span>标签</span>
+          <input id="ceMetricLabel" type="text" placeholder="如 实测续航" value="${escapeHtml(mv.label || "")}" />
+        </label>
+      </div>
+      <label class="ce-field">
+        <span>说明 caption（可选）</span>
+        <input id="ceMetricCaption" type="text" placeholder="如 重度使用一天还有富余" value="${escapeHtml(mv.caption || "")}" />
+      </label>
+      <label class="ce-check">
+        <input id="ceMetricBetter" type="checkbox"${mv.better === "low" ? " checked" : ""} />
+        <span>越低越好（如降噪 -45dB，用青绿强调）</span>
+      </label>
+    </details>
     <label class="ce-field">
       <span>口播文案</span>
       <textarea id="ceVoiceover" rows="5">${escapeHtml(scene.voiceover)}</textarea>
@@ -1065,6 +1100,39 @@ function renderClipEditor(data) {
     scene.visual.detail = event.target.value;
     liveUpdate();
   });
+
+  const ceMetricValue = els.clipEditor.querySelector("#ceMetricValue");
+  const ceMetricUnit = els.clipEditor.querySelector("#ceMetricUnit");
+  const ceMetricMax = els.clipEditor.querySelector("#ceMetricMax");
+  const ceMetricLabel = els.clipEditor.querySelector("#ceMetricLabel");
+  const ceMetricCaption = els.clipEditor.querySelector("#ceMetricCaption");
+  const ceMetricBetter = els.clipEditor.querySelector("#ceMetricBetter");
+  // 「指标值」是开关：能解析出数才挂 visual.metric（出片/预览都据此渲数据卡），否则清掉回退普通分镜。
+  const applyMetric = () => {
+    const valueText = ceMetricValue.value.trim();
+    const hasNumber = /-?\d+(?:\.\d+)?/.test(valueText);
+    if (!valueText || !hasNumber) {
+      delete scene.visual.metric;
+    } else {
+      const metric = { value: valueText };
+      const unit = ceMetricUnit.value.trim();
+      const label = ceMetricLabel.value.trim();
+      const caption = ceMetricCaption.value.trim();
+      const maxText = ceMetricMax.value.trim();
+      if (unit) metric.unit = unit;
+      if (label) metric.label = label;
+      if (caption) metric.caption = caption;
+      if (maxText && /-?\d+(?:\.\d+)?/.test(maxText)) metric.max = Number(maxText);
+      if (ceMetricBetter.checked) metric.better = "low";
+      scene.visual.metric = metric;
+    }
+    liveUpdate();
+  };
+  [ceMetricValue, ceMetricUnit, ceMetricMax, ceMetricLabel, ceMetricCaption].forEach((el) =>
+    el.addEventListener("input", applyMetric)
+  );
+  ceMetricBetter.addEventListener("change", applyMetric);
+
   ceVoiceover.addEventListener("input", (event) => {
     scene.voiceover = event.target.value;
     scene.subtitle = event.target.value;
