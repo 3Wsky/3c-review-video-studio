@@ -67,6 +67,30 @@ function countUp(rawStr, target, p) {
   return rawStr.slice(0, m.index) + shown + rawStr.slice(m.index + m[0].length);
 }
 
+// 卡拉OK字幕：随本镜进度逐字「点亮」（未念到的字压暗、已念到的全亮、光标处一字宽平滑过渡）。
+// progress ∈ [0,1] 是本镜「念到第几个字」的比例（时间正比，不依赖音频）。数字仍保持金色高亮。
+function SubtitleKaraoke({ text, progress }) {
+  const tokens = highlightTokens(text);
+  const chars = [];
+  tokens.forEach((tk) => {
+    for (const ch of Array.from(tk.text)) chars.push({ ch, hl: tk.hl });
+  });
+  if (chars.length === 0) return null;
+  const spoken = progress * chars.length;
+  return (
+    <>
+      {chars.map((c, i) => {
+        const lit = Math.max(0, Math.min(1, spoken - i)); // 光标处 0→1 渐亮
+        return (
+          <span key={i} style={{ color: c.hl ? "#ffd166" : "#fff", opacity: 0.4 + 0.6 * lit }}>
+            {c.ch}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 // 横评对比矩阵：表头（综合胜者带皇冠高亮）+ 每行一个维度（胜者格金色 ✓）。
 // 数值格带「条形增长 + 数字滚动」入场动效：随该行 stagger 揭晓，条按归一化优度长出、数字从 0 滚到位。
 function CompareMatrix({ scene, formatKey, localTime }) {
@@ -248,6 +272,9 @@ function Scene({ scene, formatKey, assetMap }) {
   const titleP = enter(t, 0.25, 0.7, "power3.out");
   const detailP = enter(t, 0.45, 0.6, "power2.out");
   const subP = enter(t, 0.55, 0.5, "power2.out");
+  // 卡拉OK逐字点亮：淡入后开始（0.7s），到本镜结束前留 0.35s 收尾；时长过短则至少扫 0.4s。线性匀速。
+  const karaokeSpan = Math.max(0.4, scene.duration - 0.35 - 0.7);
+  const karaokeP = enter(t, 0.7, karaokeSpan, "linear");
   const citeP = enter(t, 0.7, 0.5, "power1.out");
   const stockP = enter(t, 0.4, 0.5, "power1.out");
 
@@ -377,7 +404,7 @@ function Scene({ scene, formatKey, assetMap }) {
               transform: `translateY(${20 * (1 - subP)}px)`,
             }}
           >
-            <Highlight text={scene.subtitle} />
+            <SubtitleKaraoke text={scene.subtitle} progress={karaokeP} />
           </div>
         ) : null}
 
