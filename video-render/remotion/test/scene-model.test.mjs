@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
   normalizeScenes,
   normalizeCompare,
+  normalizeCaptions,
+  karaokeFraction,
   highlightTokens,
   buildComposition,
   resolveFormat,
@@ -87,6 +89,49 @@ test("highlightTokens 抽出数字+单位为高亮 token", () => {
 test("highlightTokens 空文本不炸", () => {
   assert.deepEqual(highlightTokens(""), []);
   assert.deepEqual(highlightTokens(null), []);
+});
+
+test("normalizeCaptions 过滤无效项并按 fromMs 排序", () => {
+  const caps = normalizeCaptions([
+    { fromMs: 500, toMs: 700 },
+    { fromMs: 100, toMs: 300 }, // 乱序 → 应排前
+    { fromMs: 800, toMs: 600 }, // toMs<fromMs → 丢弃
+    { fromMs: "x", toMs: 900 }, // 非数 → 丢弃
+  ]);
+  assert.deepEqual(caps, [
+    { fromMs: 100, toMs: 300 },
+    { fromMs: 500, toMs: 700 },
+  ]);
+  assert.equal(normalizeCaptions([]), null);
+  assert.equal(normalizeCaptions("nope"), null);
+});
+
+test("karaokeFraction 跟随 token 时间戳：等权、区间内插值、停顿不前进", () => {
+  const caps = [
+    { fromMs: 0, toMs: 100 },
+    { fromMs: 100, toMs: 200 },
+    { fromMs: 400, toMs: 500 }, // 200~400 是停顿
+    { fromMs: 500, toMs: 600 },
+  ];
+  assert.equal(karaokeFraction(caps, -10), 0); // 开头前
+  assert.equal(karaokeFraction(caps, 100), 0.25); // 第1个念完(1/4)
+  assert.equal(karaokeFraction(caps, 150), (1 + 0.5) / 4); // 第2个念到一半
+  assert.equal(karaokeFraction(caps, 300), 0.5); // 停顿期：停在 2/4，不前进
+  assert.equal(karaokeFraction(caps, 600), 1); // 全念完
+  assert.equal(karaokeFraction(caps, 99999), 1); // 超出 → 封顶 1
+  assert.equal(karaokeFraction(null, 100), null); // 无 captions → null（上层回退线性）
+  assert.equal(karaokeFraction([], 100), null);
+});
+
+test("normalizeScenes 透传逐词时间戳 captions（无效 → null）", () => {
+  const s = normalizeScenes({
+    timeline: [
+      { duration: 5, subtitle: "x", captions: [{ fromMs: 0, toMs: 120 }] },
+      { duration: 5, subtitle: "y" }, // 无 captions
+    ],
+  });
+  assert.deepEqual(s[0].captions, [{ fromMs: 0, toMs: 120 }]);
+  assert.equal(s[1].captions, null);
 });
 
 test("buildComposition 推导画幅与总帧数", () => {

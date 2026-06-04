@@ -28,7 +28,7 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm } from "node:fs/pr
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildHtml, buildXiaohongshuCaption, resolveFormat } from "./build.mjs";
 import { keysFromEnv, pickStockPhotoUrl } from "./stock.mjs";
 import { r2ConfigFromEnv, uploadToR2 } from "./r2.mjs";
@@ -43,6 +43,19 @@ const DEFAULT_TTS_MODEL = "mimo-v2.5-tts";
 const DEFAULT_TTS_VOICE = "mimo_default";
 const MIN_SCENE = 1.2; // 每镜最短时长（秒），避免太短闪一下
 const TAIL_PAD = 0.4; // 配音说完后留的尾音时长（秒）
+// 逐词对齐字幕：用 whisper 转写每镜配音拿到词级时间戳（仅 Remotion 引擎消费）。WHISPER_CAPTIONS=0 可关。
+const WHISPER_CAPTIONS = process.env.WHISPER_CAPTIONS !== "0";
+const REMOTION_WHISPER = join(__dirname, "remotion", "whisper.mjs");
+let _whisperMod = null;
+async function transcribeScene(rawWav, log) {
+  try {
+    if (!_whisperMod) _whisperMod = await import(pathToFileURL(REMOTION_WHISPER).href);
+    return await _whisperMod.transcribeToCaptions(rawWav, { log });
+  } catch (e) {
+    log(`逐词对齐失败（回退线性字幕）：${e.message}`);
+    return null;
+  }
+}
 
 // ---------- 子进程封装 ----------
 
@@ -241,6 +254,14 @@ async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, 
     if (b64) {
       await writeFile(raw, Buffer.from(b64, "base64"));
       dur = await probeDuration(raw);
+      // 逐词对齐：转写真实配音拿到词级时间戳，写回该镜（相对镜起点），供 Remotion 字幕跟读点亮。
+      if (eng === "remotion" && WHISPER_CAPTIONS && text) {
+        const caps = await transcribeScene(raw, log);
+        if (caps && caps.length) {
+          s.captions = caps;
+          log(`镜 ${i + 1}：逐词对齐 ${caps.length} 个 token`);
+        }
+      }
     }
     // 估时长兜底：原 duration → 字数估算 → MIN_SCENE
     const estimated = num(s?.duration, 0) || estimateByText(text);
