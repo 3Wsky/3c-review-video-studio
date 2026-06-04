@@ -73,6 +73,7 @@ class RenderInput(BaseModel):
     assets: dict | None = None
     autoStock: bool | None = False
     format: str | None = "9:16"  # 多端裁剪：9:16 / 16:9 / 1:1
+    engine: str | None = "hyperframes"  # 渲染引擎：hyperframes（默认）/ remotion
 
 
 class PosterInput(BaseModel):
@@ -780,6 +781,7 @@ async def render(data: RenderInput):
         "gpu": data.gpu if data.gpu is not None else True,
         "autoStock": bool(data.autoStock),
         "format": data.format or "9:16",
+        "engine": "remotion" if data.engine == "remotion" else "hyperframes",
     }
     if data.assets:
         payload["assets"] = data.assets

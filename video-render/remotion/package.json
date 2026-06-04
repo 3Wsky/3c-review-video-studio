@@ -1,0 +1,21 @@
+{
+  "name": "3c-video-remotion",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "3C 测评短视频 Remotion 渲染内核（与 HyperFrames 并存的另一套渲染引擎，同一套 Timeline JSON）",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "node render.mjs --in ../samples/timeline.sample.json --out out.mp4 --format 9:16",
+    "test": "node --test test/scene-model.test.mjs"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.463",
+    "@remotion/cli": "4.0.463",
+    "@remotion/player": "4.0.463",
+    "@remotion/renderer": "4.0.463",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.463"
+  }
+}

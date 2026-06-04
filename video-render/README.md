@@ -82,9 +82,21 @@ bash worker.start.sh               # 默认听 :9234
 ```
 
 接口：
-- `GET /health` → `{ ok, hasLLM, hasClone, hasStock, hyperframes }`，用于探活。
-- `POST /render`，请求体 `{ timeline, voice, cloneSpkId?, gpu?, assets?, autoStock? }`，成功返回 `video/mp4` 二进制，
+- `GET /health` → `{ ok, hasLLM, hasClone, hasStock, hyperframes, engines }`，用于探活；`engines` 列出当前可用渲染引擎。
+- `POST /render`，请求体 `{ timeline, voice, cloneSpkId?, gpu?, assets?, autoStock?, engine? }`，成功返回 `video/mp4` 二进制，
   出错返回 JSON `{ error }`。`autoStock:true` 且配了 PEXELS/PIXABAY key 时，缺图分镜会自动拉一张免费空镜（标记「需替换」）。
+
+### 渲染引擎（engine：hyperframes / remotion）
+
+`/render` 的 `engine` 字段选渲染内核，二者并存、同一份 Timeline、镜头语义一致：
+
+- `engine:"hyperframes"`（默认）：HTML+GSAP 逐帧截图（本目录 `build.mjs`），不需额外依赖。
+- `engine:"remotion"`：用 React 写视频（[`remotion/`](./remotion/README.md)）。**前提：先在 `video-render/remotion` 里 `npm install`**；
+  worker 会 shell 到 `remotion/render.mjs` 出无声视频，再走同样的「逐镜配音 + ffmpeg 混音」。
+  未装依赖时 worker 返回明确报错，`/health` 的 `engines` 不含 `remotion`。
+
+> 两套引擎的音频/时长校准/autoStock/R2 流程完全一致，换引擎只换画面渲染。
+> Remotion 那套 React 合成还被网页 `<Player>` 实时预览复用（见 `remotion/README.md`）。
 
 出片流程（每个请求在临时目录里独立完成）：
 1. 逐镜调 TTS/克隆服务合成音频；拿不到（无 key / 克隆离线）则用静音兜底，仍能出片。

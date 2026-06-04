@@ -36,6 +36,9 @@ import { r2ConfigFromEnv, uploadToR2 } from "./r2.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 9234);
 const HF = process.env.HYPERFRAMES_VERSION || "hyperframes@0.6.69";
+// 渲染引擎：hyperframes（默认）或 remotion（React 出片，需先在 video-render/remotion 里 npm install）。
+const REMOTION_RENDER = join(__dirname, "remotion", "render.mjs");
+const VALID_ENGINES = new Set(["hyperframes", "remotion"]);
 const DEFAULT_TTS_MODEL = "mimo-v2.5-tts";
 const DEFAULT_TTS_VOICE = "mimo_default";
 const MIN_SCENE = 1.2; // 每镜最短时长（秒），避免太短闪一下
@@ -166,9 +169,44 @@ async function fillStockAssets(scenes, assetsDir, timeline, log) {
   }
 }
 
-async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, format }, log) {
+// 用 HyperFrames 渲染无声视频：buildHtml → npx hyperframes render。
+async function renderSilentHyperframes({ work, timeline, assetsDir, format, gpu }, log) {
+  const html = buildHtml(timeline, { assetsDir, format });
+  await writeFile(join(work, "index.html"), html, "utf8");
+  await cp(join(__dirname, "hyperframes.json"), join(work, "hyperframes.json"));
+  const silent = join(work, "silent.mp4");
+  const renderArgs = ["--yes", HF, "render", "-o", silent];
+  if (gpu) renderArgs.push("--gpu");
+  log("开始 hyperframes render…");
+  await run("npx", renderArgs, { cwd: work, env: process.env });
+  return silent;
+}
+
+// 用 Remotion 渲染无声视频：把 timeline 落盘 → node remotion/render.mjs（React 合成出片）。
+// 音频仍交给外层（逐镜 TTS + ffmpeg 混音），所以这里只出画面。
+async function renderSilentRemotion({ work, timeline, assetsDir, format }, log) {
+  if (!existsSync(REMOTION_RENDER)) {
+    throw new Error("Remotion 渲染脚本不存在（video-render/remotion/render.mjs）");
+  }
+  if (!existsSync(join(__dirname, "remotion", "node_modules"))) {
+    throw new Error("Remotion 依赖未安装：请先在 video-render/remotion 里执行 npm install");
+  }
+  const tlFile = join(work, "timeline.json");
+  await writeFile(tlFile, JSON.stringify(timeline), "utf8");
+  const silent = join(work, "silent.mp4");
+  log("开始 remotion render…");
+  await run(
+    "node",
+    [REMOTION_RENDER, "--in", tlFile, "--out", silent, "--format", format || "9:16", "--assets", assetsDir],
+    { cwd: join(__dirname, "remotion"), env: process.env },
+  );
+  return silent;
+}
+
+async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, format, engine }, log) {
   const scenes = Array.isArray(timeline?.timeline) ? timeline.timeline : [];
   if (scenes.length === 0) throw new Error("Timeline 为空：timeline[] 没有分镜");
+  const eng = VALID_ENGINES.has(String(engine || "").trim()) ? String(engine).trim() : "hyperframes";
 
   const work = await mkdtemp(join(tmpdir(), "render-"));
   const audioDir = join(work, "audio");
@@ -186,7 +224,6 @@ async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, 
       }
     }
   }
-  await cp(join(__dirname, "hyperframes.json"), join(work, "hyperframes.json"));
 
   // 1+2) 逐镜配音 + 读真实时长校准
   const sceneAudio = [];
@@ -220,16 +257,12 @@ async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, 
   // 2.5) 缺图自动空镜（可选，需 PEXELS/PIXABAY key）
   if (autoStock) await fillStockAssets(scenes, assetsDir, timeline, log);
 
-  // 3) 生成合成 HTML（按请求画幅：9:16 / 16:9 / 1:1）
-  const html = buildHtml(timeline, { assetsDir, format });
-  await writeFile(join(work, "index.html"), html, "utf8");
-
-  // 4) hyperframes render（无声视频）
-  const silent = join(work, "silent.mp4");
-  const renderArgs = ["--yes", HF, "render", "-o", silent];
-  if (gpu) renderArgs.push("--gpu");
-  log("开始 hyperframes render…");
-  await run("npx", renderArgs, { cwd: work, env: process.env });
+  // 3+4) 按引擎渲染无声视频（按请求画幅：9:16 / 16:9 / 1:1）
+  log(`渲染引擎：${eng}`);
+  const silent =
+    eng === "remotion"
+      ? await renderSilentRemotion({ work, timeline, assetsDir, format }, log)
+      : await renderSilentHyperframes({ work, timeline, assetsDir, format, gpu }, log);
 
   // 5) 拼接声轨 + 混音
   const soundtrack = join(work, "soundtrack.wav");
@@ -368,6 +401,8 @@ const server = createServer(async (req, res) => {
       hasStock: Boolean(keysFromEnv(process.env.PEXELS_API_KEY).length || keysFromEnv(process.env.PIXABAY_API_KEY).length),
       hasR2: Boolean(r2ConfigFromEnv()),
       hyperframes: HF,
+      // 可用渲染引擎：hyperframes 始终在；remotion 需在 video-render/remotion 装好依赖。
+      engines: ["hyperframes", ...(existsSync(join(__dirname, "remotion", "node_modules")) ? ["remotion"] : [])],
     });
   }
   if (req.method === "POST" && req.url === "/render") {
