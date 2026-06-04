@@ -1473,12 +1473,25 @@ async function performRender(data, apiBase, voice) {
     lastRenderUrl = "";
   }
   setRenderBtn("渲染中…", true);
-  setCueHint("正在渲染视频：逐镜配音 → 按真实时长校准 → HyperFrames 出片，首次可能要 2-3 分钟，请稍候…");
+  setCueHint("正在渲染视频：逐镜配音 → 按真实时长校准 → 出片，首次可能要 2-3 分钟，请稍候…");
 
-  const body = { timeline: data, voice };
+  // 预览↔出片共用映射：上传了图就按镜号轮询分配（和 <Player> 预览同一份规则），并编码为 base64 发给 worker。
+  const { timeline: alignedTimeline, assetEntries } = assignSceneAssets(data);
+  const body = { timeline: alignedTimeline, voice };
   if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
   if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
   if (els.renderFormat && els.renderFormat.value) body.format = els.renderFormat.value;
+  // 把上传图编码成 base64 发给 worker（key 和 scene.visual.asset 一致，worker 写到 assetsDir）
+  const assetKeys = Object.keys(assetEntries);
+  if (assetKeys.length) {
+    const assets = {};
+    await Promise.all(
+      assetKeys.map(async (key) => {
+        try { assets[key] = await urlToBase64(assetEntries[key].url); } catch (e) { /* skip */ }
+      })
+    );
+    if (Object.keys(assets).length) body.assets = assets;
+  }
 
   try {
     const response = await fetch(`${apiBase}/api/render`, {
@@ -1611,22 +1624,45 @@ function loadRemotionPlayerScript() {
   return remotionScriptPromise;
 }
 
+// ---- 预览↔后端共用：按镜号把上传图轮询分配给各镜 ----
+// 返回 { timeline(已重写 visual.asset), assetEntries: { key: {url,type} } }
+// 没有上传图时返回原 timeline + 空 assetEntries。
+function assignSceneAssets(data) {
+  const scenes = Array.isArray(data.timeline) ? data.timeline : [];
+  const imgs = initialState.assets.filter((a) => a.type && a.type.startsWith("image/") && a.url);
+  if (!imgs.length) return { timeline: data, assetEntries: {} };
+  const assetEntries = {};
+  const rewritten = scenes.map((scene, i) => {
+    const img = imgs[i % imgs.length];
+    const ext = (img.type || "image/png").split("/")[1] || "png";
+    const key = `scene-${i}.${ext === "jpeg" ? "jpg" : ext}`;
+    assetEntries[key] = { url: img.url, type: img.type };
+    return { ...scene, visual: { ...(scene.visual || {}), asset: key } };
+  });
+  return { timeline: { ...data, timeline: rewritten }, assetEntries };
+}
+
+// blob:/data: URL → base64 字符串（不含前缀），用于渲染请求把图传给 worker。
+async function urlToBase64(url) {
+  const resp = await fetch(url);
+  const blob = await resp.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 // 把当前 Timeline + 画幅 + 上传图整理成 <Player> 的 props。
-// 上传了图就按镜号循环分配（和右侧手机预览取图逻辑一致），没图则纯渐变背景。
+// 上传了图就按镜号循环分配（和出片相同映射规则），没图则纯渐变背景。
 function buildRemotionProps() {
   const data = currentTimeline();
   const format = (els.renderFormat && els.renderFormat.value) || "9:16";
-  const scenes = Array.isArray(data.timeline) ? data.timeline : [];
-  const imgs = initialState.assets.filter((a) => a.type && a.type.startsWith("image/") && a.url);
+  const { timeline, assetEntries } = assignSceneAssets(data);
   const assetMap = {};
-  let timeline = data;
-  if (imgs.length) {
-    const rewritten = scenes.map((scene, i) => {
-      const key = `__preview_asset_${i}`;
-      assetMap[key] = imgs[i % imgs.length].url;
-      return { ...scene, visual: { ...(scene.visual || {}), asset: key } };
-    });
-    timeline = { ...data, timeline: rewritten };
+  for (const [key, entry] of Object.entries(assetEntries)) {
+    assetMap[key] = entry.url;
   }
   return { timeline, format, assetMap };
 }
