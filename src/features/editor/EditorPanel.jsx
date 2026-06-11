@@ -18,6 +18,7 @@ import {
   deleteScene,
   moveScene
 } from "./editor-bridge.js";
+import PreviewStage from "../preview/PreviewStage.jsx";
 
 const NUM_RE = /-?\d+(?:\.\d+)?/;
 
@@ -60,41 +61,7 @@ export default function EditorPanel() {
       </div>
 
       <div class="editor-row">
-        <aside class="preview-col">
-          {/* 预览舞台由 legacy renderPreview 驱动（静态壳，勿加动态内容） */}
-          <div class="scene-nav">
-            <button class="square-button" id="prevSceneBtn" type="button" title="上一镜">
-              <i data-lucide="chevron-left" />
-            </button>
-            <span id="sceneIndicator">1 / 6</span>
-            <button class="square-button" id="nextSceneBtn" type="button" title="下一镜">
-              <i data-lucide="chevron-right" />
-            </button>
-          </div>
-          <div class="phone-frame">
-            <div class="video-stage" id="videoStage">
-              <div class="stage-topline">
-                <span id="stageProduct">3C 产品</span>
-                <span id="stageTime">00:00</span>
-              </div>
-              <div class="product-visual" id="productVisual">
-                <div class="device-placeholder">
-                  <span />
-                </div>
-              </div>
-              <div class="host-slot center" id="hostSlot">
-                <div class="host-head" />
-                <div class="host-body" />
-              </div>
-              <div class="info-card" id="infoCard">
-                <small id="visualType">结论</small>
-                <strong id="visualHeadline">先看结论</strong>
-                <span id="visualDetail">最大优点与最大限制</span>
-              </div>
-              <div class="subtitle-bar" id="subtitleBar" />
-            </div>
-          </div>
-        </aside>
+        <PreviewStage />
 
         <section class="clip-editor">
           <div class="ce-head">

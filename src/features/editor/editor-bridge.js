@@ -5,12 +5,13 @@ let directorApi = null;
 
 function syncFromDirector() {
   if (!directorApi) return;
-  const { timeline, currentScene, assets, generated } = directorApi.getState();
+  const { timeline, currentScene, assets, generated, layout } = directorApi.getState();
   useDirectorStore.setState({
     timeline: timeline?.timeline ? structuredClone(timeline) : null,
     currentScene,
     assets: assets.map((a) => ({ ...a })),
-    generated
+    generated,
+    layout: layout || useDirectorStore.getState().layout
   });
 }
 

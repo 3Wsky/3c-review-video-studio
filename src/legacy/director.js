@@ -1053,6 +1053,11 @@ function isPreactEditorActive() {
   return Boolean(track?.hasAttribute("hidden"));
 }
 
+/** Preact PreviewStage 已接管预览舞台时，跳过 legacy renderPreview */
+function isPreactPreviewActive() {
+  return Boolean(document.querySelector("#videoStage[data-preact-preview]"));
+}
+
 function renderTrackRuler(data) {
   if (!els.trackRuler || isPreactEditorActive()) return;
   const total = data.project.targetDuration || 90;
@@ -1348,6 +1353,7 @@ function renderJson(data) {
 }
 
 function renderPreview(data) {
+  if (isPreactPreviewActive()) return;
   const timeline = data.timeline;
   const scene = timeline[initialState.currentScene] || timeline[0];
   if (!scene) return;
@@ -2704,7 +2710,8 @@ function createDirectorApi() {
         timeline: initialState.timeline,
         currentScene: initialState.currentScene,
         assets: initialState.assets,
-        generated: initialState.generated
+        generated: initialState.generated,
+        layout: initialState.layout
       };
     },
 
