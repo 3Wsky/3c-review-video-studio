@@ -1,0 +1,166 @@
+/* 数据可视化参数卡（visual.dataviz）· 预览舞台内的小型图表卡
+   占位与 .info-card 一致（绝对定位在字幕条上方），深色玻璃底配金色强调；
+   better=low 时强调色换青绿（.dv-low）。 */
+
+.dv-card {
+  position: absolute;
+  z-index: 6;
+  left: 18px;
+  right: 18px;
+  bottom: 92px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(16, 19, 26, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 8px;
+  --dv-accent: #ffd166;
+}
+
+.dv-card.dv-low {
+  --dv-accent: #7ee0c0;
+}
+
+.dv-title {
+  color: var(--dv-accent);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+/* ---------- 条形图 ---------- */
+
+.dv-bars {
+  display: grid;
+  gap: 7px;
+}
+
+.dv-bar-row {
+  display: grid;
+  grid-template-columns: minmax(48px, auto) 1fr minmax(44px, auto);
+  align-items: center;
+  gap: 8px;
+}
+
+.dv-bar-label {
+  color: #c6cfe6;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dv-bar-track {
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.10);
+  overflow: hidden;
+}
+
+.dv-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--dv-accent) 65%, transparent), var(--dv-accent));
+}
+
+.dv-bar-value {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dv-bar-value i,
+.dv-ring strong i {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dv-accent);
+  margin-left: 2px;
+}
+
+/* ---------- 进度环 ---------- */
+
+.dv-rings {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+}
+
+.dv-ring {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  position: relative;
+}
+
+.dv-ring svg {
+  width: 64px;
+  height: 64px;
+}
+
+.dv-ring-bg,
+.dv-ring-fg {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.dv-ring-bg {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+.dv-ring-fg {
+  stroke: var(--dv-accent);
+}
+
+.dv-ring strong {
+  position: absolute;
+  top: 22px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.dv-ring span {
+  color: #c6cfe6;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ---------- 雷达图 ---------- */
+
+.dv-radar {
+  width: 100%;
+  max-height: 150px;
+  display: block;
+  margin: 0 auto;
+}
+
+.dv-radar-grid {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.dv-radar-axis {
+  stroke: rgba(255, 255, 255, 0.10);
+  stroke-width: 1;
+}
+
+.dv-radar-value {
+  fill: color-mix(in srgb, var(--dv-accent) 32%, transparent);
+  stroke: var(--dv-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.dv-radar-label {
+  fill: #c6cfe6;
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}

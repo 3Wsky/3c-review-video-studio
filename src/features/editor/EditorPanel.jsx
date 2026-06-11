@@ -1,13 +1,16 @@
-import { useMemo } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 import {
   TimelineTrack,
   Inspector,
   Button,
   Field,
   Input,
+  Textarea,
+  SegmentGroup,
   FieldGrid,
   Collapsible
 } from "../../components/ui/index.js";
+import { sanitizeDataviz } from "../../../shared/dataviz/geometry.mjs";
 import { useDirectorStore } from "../../store/useDirectorStore.js";
 import { toTrackScenes, toInspectorScene } from "./timeline-utils.js";
 import {
@@ -21,6 +24,105 @@ import {
 import PreviewStage from "../preview/PreviewStage.jsx";
 
 const NUM_RE = /-?\d+(?:\.\d+)?/;
+
+// 数据图表 items DSL：每行「标签=值」或「标签=值/上限」，如「轻度使用=14」「重度=8/16」
+function parseDatavizItems(text) {
+  return String(text || "")
+    .split(/\n+/)
+    .map((line) => {
+      const m = /^\s*(.+?)\s*=\s*(-?\d+(?:\.\d+)?)\s*(?:\/\s*(\d+(?:\.\d+)?))?\s*$/.exec(line);
+      if (!m) return null;
+      const item = { label: m[1], value: Number(m[2]) };
+      if (m[3]) item.max = Number(m[3]);
+      return item;
+    })
+    .filter(Boolean);
+}
+
+function datavizItemsToText(items) {
+  return (items || [])
+    .map((item) => `${item.label}=${item.value}${item.max ? `/${item.max}` : ""}`)
+    .join("\n");
+}
+
+// 数据图表编辑器：草稿态本地保存（允许中间态不合法），合法时 sanitize 后写回，
+// 不合法（条目不足/没选类型）写 null 删除 dataviz 回退普通分镜——与 metric 开关语义一致。
+function DatavizEditor({ dataviz, onPatch }) {
+  const [draft, setDraft] = useState(() => ({
+    kind: dataviz?.kind || "bar",
+    title: dataviz?.title || "",
+    unit: dataviz?.unit || "",
+    betterLow: dataviz?.better === "low",
+    itemsText: datavizItemsToText(dataviz?.items)
+  }));
+
+  const commit = (next) => {
+    setDraft(next);
+    onPatch(
+      sanitizeDataviz({
+        kind: next.kind,
+        title: next.title,
+        unit: next.unit,
+        better: next.betterLow ? "low" : "high",
+        items: parseDatavizItems(next.itemsText)
+      })
+    );
+  };
+
+  return (
+    <>
+      <p class="ce-metric-hint">
+        把产品事实里的真实数字（续航/重量/价格/跑分）渲成动画图表。每行一条「标签=值」或「标签=值/上限」；
+        条形/进度环至少 2 行、雷达至少 3 行，不足则自动关闭图表回退普通分镜。
+      </p>
+      <Field label="图表类型">
+        <SegmentGroup
+          columns={3}
+          options={[
+            { value: "bar", label: "条形对比" },
+            { value: "ring", label: "进度环" },
+            { value: "radar", label: "雷达图" }
+          ]}
+          value={draft.kind}
+          onChange={(kind) => commit({ ...draft, kind })}
+        />
+      </Field>
+      <FieldGrid>
+        <Field label="标题">
+          <Input
+            placeholder="如 实测续航"
+            value={draft.title}
+            onInput={(e) => commit({ ...draft, title: e.currentTarget.value })}
+          />
+        </Field>
+        <Field label="单位">
+          <Input
+            placeholder="如 小时 / g / 元"
+            value={draft.unit}
+            onInput={(e) => commit({ ...draft, unit: e.currentTarget.value })}
+          />
+        </Field>
+      </FieldGrid>
+      <Field label="数据项（每行一条）">
+        <Textarea
+          rows={4}
+          placeholder={"轻度使用=14\n重度使用=8/16"}
+          value={draft.itemsText}
+          onInput={(e) => setDraft({ ...draft, itemsText: e.currentTarget.value })}
+          onChange={(e) => commit({ ...draft, itemsText: e.currentTarget.value })}
+        />
+      </Field>
+      <label class="checkbox-row">
+        <input
+          type="checkbox"
+          checked={draft.betterLow}
+          onChange={(e) => commit({ ...draft, betterLow: e.currentTarget.checked })}
+        />
+        <span>越低越好（如重量/噪音，用青绿强调）</span>
+      </label>
+    </>
+  );
+}
 
 export default function EditorPanel() {
   const timeline = useDirectorStore((s) => s.timeline);
@@ -160,6 +262,20 @@ export default function EditorPanel() {
                 />
                 <span>越低越好（如降噪 -45dB，用青绿强调）</span>
               </label>
+            </Collapsible>
+          ) : null}
+
+          {scene ? (
+            <Collapsible
+              key={`${scene.id}-dataviz`}
+              summary="数据图表（可选）· 条形对比 / 雷达 / 进度环"
+              open={Boolean(scene.visual?.dataviz)}
+            >
+              <DatavizEditor
+                key={scene.id}
+                dataviz={scene.visual?.dataviz || null}
+                onPatch={(viz) => patchScene(currentScene, { dataviz: viz })}
+              />
             </Collapsible>
           ) : null}
 

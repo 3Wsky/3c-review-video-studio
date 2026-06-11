@@ -1,3 +1,5 @@
+import { sanitizeDataviz } from "../dataviz/geometry.mjs";
+
 /** @param {string} value @param {number} maxLength */
 export function clampText(value, maxLength) {
   return String(value || "").slice(0, maxLength);
@@ -27,6 +29,7 @@ export function buildGenerateTimelinePrompt(input) {
 7. 第 1 个分镜（钩子）时长 3-6 秒（必须 ≤6 秒）；其余每个分镜 8-18 秒，中文短句，适合 TTS。
 8. 每个分镜的 title 用节奏标签标出它在留人结构里的角色：第 1 个固定为"前5秒·钩子"，后续依次用"痛点共鸣""悬念展开""高潮·揭晓""反转·短板""结尾·结论+互动"之类（按实际镜数取舍）。
 9. 输出必须是严格 JSON，不要 markdown，不要代码块，不要解释。
+10. 数据图表（可选，仅在有真实数字时）：若「产品事实」里有 2 个以上可对比的真实数值参数（如多场景续航小时数、不同模式重量/价格/跑分），可给最适合的 1-2 个分镜的 visual 追加 "dataviz" 字段，渲成动画图表：{"kind":"bar","title":"实测续航","unit":"小时","items":[{"label":"轻度使用","value":14},{"label":"重度使用","value":8}]}。kind 选择：同单位多项对比用 "bar"；单项对上限的占比用 "ring"（item 可带 "max"）；3-6 个维度的综合表现用 "radar"（每项必须带 "max" 作满分）。数字必须逐字来自「产品事实」，绝不允许编造、推算或从评测素材里抄其它产品的数；「产品事实」没有足够数字就完全不输出 dataviz 字段。
 
 输出结构：
 {
@@ -113,6 +116,7 @@ export function normalizeTimelineResponse(data, input) {
     cursor = end;
 
     const voiceover = String(scene.voiceover || scene.subtitle || "").trim();
+    const dataviz = sanitizeDataviz(scene.visual?.dataviz);
     return {
       id: scene.id || `scene_${String(index + 1).padStart(2, "0")}`,
       index: index + 1,
@@ -127,7 +131,8 @@ export function normalizeTimelineResponse(data, input) {
         layout: scene.visual?.layout || input.layout || "center",
         headline: scene.visual?.headline || scene.title || "核心观点",
         detail: scene.visual?.detail || "根据输入素材生成",
-        asset: scene.visual?.asset || "uploaded_product_asset"
+        asset: scene.visual?.asset || "uploaded_product_asset",
+        ...(dataviz ? { dataviz } : {})
       },
       checks: Array.isArray(scene.checks)
         ? scene.checks

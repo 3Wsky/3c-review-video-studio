@@ -42,9 +42,42 @@
           "duration": { "type": "number" },
           "voiceover": { "type": "string" },
           "subtitle": { "type": "string" },
-          "visual": { "type": "object" },
+          "visual": {
+            "type": "object",
+            "properties": {
+              "dataviz": { "$ref": "#/$defs/dataviz" }
+            }
+          },
           "checks": { "type": "array", "items": { "type": "string" } },
           "source": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "dataviz": {
+      "title": "数据可视化参数卡（动画条形图 / 雷达图 / 进度环）",
+      "type": "object",
+      "required": ["kind", "items"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["bar", "radar", "ring"] },
+        "title": { "type": "string" },
+        "unit": { "type": "string" },
+        "better": { "type": "string", "enum": ["high", "low"] },
+        "max": { "type": "number", "exclusiveMinimum": 0 },
+        "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["label", "value"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "value": { "type": "number" },
+              "max": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
         }
       }
     }

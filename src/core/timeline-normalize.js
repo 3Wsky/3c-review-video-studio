@@ -52,6 +52,9 @@ export function normalizeTimelineData(data, input) {
           : {}),
         ...(scene.visual?.compare && typeof scene.visual.compare === "object"
           ? { compare: scene.visual.compare }
+          : {}),
+        ...(scene.visual?.dataviz && typeof scene.visual.dataviz === "object"
+          ? { dataviz: scene.visual.dataviz }
           : {})
       },
       checks: Array.isArray(scene.checks) ? scene.checks : fallback.checks,

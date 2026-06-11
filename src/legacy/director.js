@@ -562,7 +562,8 @@ function normalizeTimelineData(data) {
         detail: scene.visual?.detail || fallback.visual.detail,
         asset: scene.visual?.asset || fallback.visual.asset,
         ...(scene.visual?.metric && typeof scene.visual.metric === "object" ? { metric: scene.visual.metric } : {}),
-        ...(scene.visual?.compare && typeof scene.visual.compare === "object" ? { compare: scene.visual.compare } : {})
+        ...(scene.visual?.compare && typeof scene.visual.compare === "object" ? { compare: scene.visual.compare } : {}),
+        ...(scene.visual?.dataviz && typeof scene.visual.dataviz === "object" ? { dataviz: scene.visual.dataviz } : {})
       },
       checks: Array.isArray(scene.checks) ? scene.checks : fallback.checks,
       source: scene.source || "Cloudflare LLM"
@@ -2722,7 +2723,7 @@ function createDirectorApi() {
       renderAll(false);
     },
 
-    /** @param {number} index @param {{ title?: string; duration?: number; voiceover?: string; subtitle?: string; visual?: object; metric?: object|null }} patch */
+    /** @param {number} index @param {{ title?: string; duration?: number; voiceover?: string; subtitle?: string; visual?: object; metric?: object|null; dataviz?: object|null }} patch */
     patchScene(index, patch) {
       const scene = sceneAt(index);
       if (!scene) return;
@@ -2739,6 +2740,10 @@ function createDirectorApi() {
       if (patch.metric !== undefined) {
         if (patch.metric) scene.visual.metric = patch.metric;
         else delete scene.visual.metric;
+      }
+      if (patch.dataviz !== undefined) {
+        if (patch.dataviz) scene.visual.dataviz = patch.dataviz;
+        else delete scene.visual.dataviz;
       }
       if (patch.duration !== undefined) {
         scene.duration = Math.max(2, Number(patch.duration) || scene.duration);

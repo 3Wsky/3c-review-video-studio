@@ -1,6 +1,7 @@
 import { useMemo } from "preact/hooks";
 import { useDirectorStore } from "../../store/useDirectorStore.js";
 import { formatSceneTime } from "./preview-utils.js";
+import DataVizCard from "./DataVizCard.jsx";
 
 export default function PreviewStage() {
   const timeline = useDirectorStore((s) => s.timeline);
@@ -57,11 +58,15 @@ export default function PreviewStage() {
             <div class="host-body" />
           </div>
 
-          <div class="info-card" id="infoCard">
-            <small id="visualType">{visual.type || "结论"}</small>
-            <strong id="visualHeadline">{visual.headline || "先看结论"}</strong>
-            <span id="visualDetail">{visual.detail || "最大优点与最大限制"}</span>
-          </div>
+          {visual.dataviz ? (
+            <DataVizCard dataviz={visual.dataviz} sceneKey={scene?.id || currentScene} />
+          ) : (
+            <div class="info-card" id="infoCard">
+              <small id="visualType">{visual.type || "结论"}</small>
+              <strong id="visualHeadline">{visual.headline || "先看结论"}</strong>
+              <span id="visualDetail">{visual.detail || "最大优点与最大限制"}</span>
+            </div>
+          )}
 
           <div class="subtitle-bar" id="subtitleBar">
             {scene?.subtitle || ""}
