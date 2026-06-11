@@ -15,3 +15,12 @@ tmp/
 backend/.env
 __pycache__/
 *.pyc
+
+# voice-clone local runtime (F盘部署产物，不入库)
+voice-clone/CosyVoice/
+voice-clone/.venv/
+voice-clone/python-dist/
+voice-clone/uv-bin/
+voice-clone/spk_data/
+voice-clone/*.zip
+voice-clone/miniconda.sh

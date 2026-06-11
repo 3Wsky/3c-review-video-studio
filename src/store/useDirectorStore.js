@@ -41,6 +41,18 @@ export const useDirectorStore = create((set, get) => ({
   busy: false,
   cloneSpkId: "",
 
+  checkupOpen: false,
+  checkupReport: null,
+  gateOpen: false,
+  gateReport: null,
+  gateAllowProceed: false,
+
+  openCheckup: (report) => set({ checkupOpen: true, checkupReport: report }),
+  closeCheckup: () => set({ checkupOpen: false, checkupReport: null }),
+  openGate: (report, allowProceed = false) =>
+    set({ gateOpen: true, gateReport: report, gateAllowProceed: allowProceed }),
+  closeGate: () => set({ gateOpen: false, gateReport: null, gateAllowProceed: false }),
+
   setPhase: (phase) => set({ phase }),
   setField: (key, value) => set({ [key]: value }),
 

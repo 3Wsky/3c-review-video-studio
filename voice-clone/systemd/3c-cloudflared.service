@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare Tunnel 3c-worker (render.1go.im + voice.1go.im)
+After=network.target 3c-voice-clone.service
+
+[Service]
+Type=simple
+User=administrator
+ExecStart=/usr/local/bin/cloudflared tunnel run 3c-worker
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

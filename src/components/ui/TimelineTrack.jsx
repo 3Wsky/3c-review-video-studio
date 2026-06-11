@@ -1,4 +1,4 @@
-import { useMemo } from "preact/hooks";
+import { useMemo, useState } from "preact/hooks";
 
 /**
  * TimelineTrack — 横向时间线轨道与标尺组件
@@ -6,6 +6,7 @@ import { useMemo } from "preact/hooks";
  *   scenes: Array<{ id: string; start: number; end: number; label: string; voiceover?: string }>;
  *   currentSceneIndex: number;
  *   onSelectScene: (index: number) => void;
+ *   onMoveScene?: (from: number, to: number) => void;
  *   className?: string;
  * }} props
  */
@@ -13,8 +14,11 @@ export function TimelineTrack({
   scenes = [],
   currentSceneIndex = 0,
   onSelectScene,
+  onMoveScene,
   className = ""
 }) {
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
   const totalDuration = useMemo(() => {
     if (scenes.length === 0) return 0;
     return scenes[scenes.length - 1].end;
@@ -65,16 +69,50 @@ export function TimelineTrack({
           const leftPercent = totalDuration > 0 ? (scene.start / totalDuration) * 100 : 0;
           const isActive = index === currentSceneIndex;
 
+          const dragClass =
+            dragIndex === index ? "ds-timeline-clip--dragging" : "";
+          const dropClass =
+            dropIndex === index ? "ds-timeline-clip--drop-target" : "";
+
           return (
             <button
               key={scene.id || index}
               type="button"
-              className={`ds-timeline-clip ${isActive ? "ds-timeline-clip--active" : ""}`}
+              draggable={Boolean(onMoveScene)}
+              className={`ds-timeline-clip ${isActive ? "ds-timeline-clip--active" : ""} ${dragClass} ${dropClass}`.trim()}
               style={{
                 left: `${leftPercent}%`,
                 width: `${widthPercent}%`
               }}
               onClick={() => onSelectScene && onSelectScene(index)}
+              onDragStart={(e) => {
+                if (!onMoveScene) return;
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(index));
+                setDragIndex(index);
+              }}
+              onDragEnd={() => {
+                setDragIndex(null);
+                setDropIndex(null);
+              }}
+              onDragOver={(e) => {
+                if (!onMoveScene) return;
+                e.preventDefault();
+                setDropIndex(index);
+              }}
+              onDragLeave={() => {
+                setDropIndex((prev) => (prev === index ? null : prev));
+              }}
+              onDrop={(e) => {
+                if (!onMoveScene) return;
+                e.preventDefault();
+                setDragIndex(null);
+                setDropIndex(null);
+                const from = Number(e.dataTransfer.getData("text/plain"));
+                if (!Number.isNaN(from) && from !== index) {
+                  onMoveScene(from, index);
+                }
+              }}
               title={`${scene.label || `镜头 ${index + 1}`} (${duration.toFixed(1)}s)`}
             >
               <div className="ds-timeline-clip-inner">

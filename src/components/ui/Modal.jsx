@@ -8,6 +8,7 @@ import { Button } from "./Button.jsx";
  *   onClose: () => void;
  *   title: string;
  *   subtitle?: string;
+ *   icon?: import('preact').ComponentChildren;
  *   size?: 'sm'|'md'|'lg';
  *   children: import('preact').ComponentChildren;
  *   actions?: import('preact').ComponentChildren;
@@ -19,12 +20,12 @@ export function Modal({
   onClose,
   title,
   subtitle,
+  icon,
   size = "md",
   children,
   actions,
   className = ""
 }) {
-  // 监听 ESC 键关闭
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (e) => {
@@ -33,6 +34,12 @@ export function Modal({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (open && typeof window !== "undefined" && window.lucide?.createIcons) {
+      window.lucide.createIcons();
+    }
+  }, [open, title]);
 
   if (!open) return null;
 
@@ -46,7 +53,10 @@ export function Modal({
       >
         <header className="ds-modal-head">
           <div>
-            <h3 className="ds-modal-title">{title}</h3>
+            <h3 className="ds-modal-title">
+              {icon ? <span className="ds-modal-title-icon">{icon}</span> : null}
+              {title}
+            </h3>
             {subtitle ? <p className="ds-modal-subtitle">{subtitle}</p> : null}
           </div>
           <button

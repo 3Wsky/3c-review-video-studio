@@ -1047,8 +1047,14 @@ function deleteScene(index) {
 
 /* ---- 渲染 ---- */
 
+/** Preact EditorPanel 已接管时间线/剪辑器 DOM 时，跳过 legacy 重复渲染 */
+function isPreactEditorActive() {
+  const track = document.querySelector("#track");
+  return Boolean(track?.hasAttribute("hidden"));
+}
+
 function renderTrackRuler(data) {
-  if (!els.trackRuler) return;
+  if (!els.trackRuler || isPreactEditorActive()) return;
   const total = data.project.targetDuration || 90;
   els.trackRuler.innerHTML = "";
   for (let i = 0; i <= 5; i += 1) {
@@ -1059,6 +1065,7 @@ function renderTrackRuler(data) {
 }
 
 function renderTrack(data) {
+  if (!els.track || isPreactEditorActive()) return;
   const timeline = data.timeline;
   const total = data.project.targetDuration || timeline.reduce((sum, s) => sum + s.duration, 0) || 90;
   els.track.innerHTML = "";
@@ -1102,6 +1109,7 @@ function renderTrack(data) {
 }
 
 function renderClipEditor(data) {
+  if (!els.clipEditor || isPreactEditorActive()) return;
   const timeline = data.timeline;
   const scene = timeline[initialState.currentScene] || timeline[0];
   if (!scene) {
@@ -1396,6 +1404,14 @@ function renderAll(rebuild = true) {
   if (window.lucide) window.lucide.createIcons();
   saveDraft();
   refreshRemotionPreviewIfOpen();
+  notifyDirectorUpdate();
+}
+
+/** 通知 Preact 侧（features/editor）状态已变化 */
+function notifyDirectorUpdate() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("director:update"));
+  }
 }
 
 function setLayout(layout) {
@@ -2253,117 +2269,15 @@ function scoreTone(score) {
   return score >= 85 ? "good" : score >= 70 ? "ok" : score >= 55 ? "warn" : "bad";
 }
 
-let checkupMask = null;
-
 function closeCheckup() {
-  if (checkupMask) {
-    checkupMask.remove();
-    checkupMask = null;
-    document.removeEventListener("keydown", onCheckupKey);
-  }
-}
-function onCheckupKey(event) {
-  if (event.key === "Escape") closeCheckup();
+  window.dispatchEvent(new CustomEvent("director:close-checkup"));
 }
 
 function openCheckup() {
   closeCheckup();
   const data = currentTimeline();
   const report = scoreRetention(data);
-
-  const mask = document.createElement("div");
-  mask.className = "checkup-mask";
-
-  const ringColor = toneColor(report.grade.tone);
-  const dimsHtml = report.dims
-    .map((d) => {
-      const c = toneColor(scoreTone(d.score));
-      return `
-      <div class="ck-dim">
-        <div class="ck-dim-top"><span>${escapeHtml(d.label)}</span><strong style="color:${c}">${d.score}</strong></div>
-        <div class="ck-bar"><i style="width:${d.score}%;background:${c}"></i></div>
-        <div class="ck-dim-note">${escapeHtml(d.note)}</div>
-      </div>`;
-    })
-    .join("");
-
-  const scenesHtml = report.scenes
-    .map((s) => {
-      const c = toneColor(scoreTone(s.score));
-      const issues = s.issues.length
-        ? `<ul class="ck-issues">${s.issues.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul>`
-        : `<p class="ck-ok">这一镜留人结构没问题 ✓</p>`;
-      const actions = s.issues.length
-        ? `<div class="ck-scene-actions">
-             <button class="icon-button" data-jump="${s.pos}" type="button"><i data-lucide="pencil"></i><span>去编辑</span></button>
-             <button class="icon-button ck-rewrite" data-rewrite="${s.pos}" type="button"><i data-lucide="wand-sparkles"></i><span>重写本镜</span></button>
-           </div>`
-        : "";
-      return `
-      <div class="ck-scene ${s.isWeak ? "is-weak" : ""}">
-        <div class="ck-scene-head">
-          <span class="ck-no">${s.index}</span>
-          <span class="ck-scene-title">${escapeHtml(s.title || "")}</span>
-          <span class="ck-score" style="color:${c};border-color:${c}">${s.score}</span>
-        </div>
-        ${issues}
-        ${actions}
-      </div>`;
-    })
-    .join("");
-
-  mask.innerHTML = `
-    <div class="checkup-card" role="dialog" aria-label="留人体检报告">
-      <div class="checkup-head">
-        <div>
-          <h3><i data-lucide="stethoscope"></i> 留人体检</h3>
-          <p>按短视频留人逻辑（前 5 秒钩子 + 情绪曲线）给当前脚本打分，仅供参考</p>
-        </div>
-        <button class="ck-close" id="ckClose" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
-      </div>
-      <div class="checkup-body">
-        <div class="ck-overall">
-          <div class="ck-ring" style="background:conic-gradient(${ringColor} ${report.overall * 3.6}deg, rgba(255,255,255,0.08) 0)">
-            <div class="ck-ring-in"><strong>${report.overall}</strong><small style="color:${ringColor}">${report.grade.label}</small></div>
-          </div>
-          <div class="ck-dims">${dimsHtml}</div>
-        </div>
-        <div class="ck-scenes-title">逐镜诊断</div>
-        <div class="ck-scenes">${scenesHtml}</div>
-      </div>
-      <p class="checkup-foot">「重写本镜」会调用 MiMo 只重写该镜（需已部署后端）；评分为启发式规则，最终以你的判断为准。</p>
-    </div>`;
-
-  mask.addEventListener("click", (event) => {
-    if (event.target === mask) closeCheckup();
-  });
-  document.body.appendChild(mask);
-  checkupMask = mask;
-  document.addEventListener("keydown", onCheckupKey);
-
-  mask.querySelector("#ckClose").addEventListener("click", closeCheckup);
-  mask.querySelectorAll("[data-jump]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      initialState.currentScene = Number(btn.dataset.jump);
-      closeCheckup();
-      renderAll(false);
-      if (els.clipEditor) els.clipEditor.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  });
-  mask.querySelectorAll("[data-rewrite]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      initialState.currentScene = Number(btn.dataset.rewrite);
-      closeCheckup();
-      renderAll(false);
-      const rewriteBtn = els.clipEditor && els.clipEditor.querySelector("#ceRewrite");
-      if (rewriteBtn) {
-        if (els.clipEditor) els.clipEditor.scrollIntoView({ behavior: "smooth", block: "center" });
-        rewriteBtn.click();
-      }
-    });
-  });
-
-  if (window.lucide) window.lucide.createIcons();
+  window.dispatchEvent(new CustomEvent("director:open-checkup", { detail: { report } }));
 }
 
 /* ---- 防垃圾质检闸门：留人分 + 事实溯源 + 反洗稿相似度 ---- */
@@ -2497,91 +2411,16 @@ function qualityGate(data) {
   return { pass, checks, retention, unsourced, flagged };
 }
 
-let gateMask = null;
-
 function closeGate() {
-  if (gateMask) {
-    gateMask.remove();
-    gateMask = null;
-    document.removeEventListener("keydown", onGateKey);
-  }
+  window.dispatchEvent(new CustomEvent("director:close-gate"));
 }
-function onGateKey(event) {
-  if (event.key === "Escape") closeGate();
-}
-
-const GATE_TONE = { pass: "var(--teal)", warn: "var(--amber)", fail: "var(--red)" };
-const GATE_ICON = { pass: "shield-check", warn: "shield-alert", fail: "shield-x" };
 
 // onProceed 传入时（来自渲染流程）显示「仍要渲染」放行按钮；不传则是纯查看。
 function openGate(report, onProceed) {
   closeGate();
-  const mask = document.createElement("div");
-  mask.className = "checkup-mask";
-
-  const checksHtml = report.checks
-    .map((c) => {
-      const tone = GATE_TONE[c.status];
-      const detail = c.detail && c.detail.length
-        ? `<ul class="gate-detail">${c.detail.slice(0, 8).map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
-        : "";
-      return `
-      <div class="gate-check gate-${c.status}">
-        <div class="gate-check-head">
-          <i data-lucide="${GATE_ICON[c.status]}" style="color:${tone}"></i>
-          <span class="gate-check-label">${escapeHtml(c.label)}</span>
-          <span class="gate-check-tag" style="color:${tone};border-color:${tone}">${c.status === "pass" ? "通过" : c.status === "warn" ? "提醒" : "未通过"}</span>
-        </div>
-        <p class="gate-check-summary">${escapeHtml(c.summary)}</p>
-        ${detail}
-      </div>`;
-    })
-    .join("");
-
-  const passTone = report.pass ? "var(--teal)" : "var(--red)";
-  const footActions = onProceed
-    ? `<button class="icon-button" id="gateClose2" type="button"><i data-lucide="pencil"></i><span>去修改</span></button>
-       <button class="icon-button gate-proceed" id="gateProceed" type="button"><i data-lucide="play"></i><span>仍要渲染</span></button>`
-    : `<button class="icon-button" id="gateClose2" type="button"><i data-lucide="check"></i><span>知道了</span></button>`;
-
-  mask.innerHTML = `
-    <div class="checkup-card gate-card" role="dialog" aria-label="质检闸门">
-      <div class="checkup-head">
-        <div>
-          <h3><i data-lucide="shield-check"></i> 防垃圾质检闸门</h3>
-          <p>出片前三道闸门：留人体检 · 事实溯源 · 反洗稿。不达标会拦下，可人工放行。</p>
-        </div>
-        <button class="ck-close" id="gateClose" type="button" aria-label="关闭"><i data-lucide="x"></i></button>
-      </div>
-      <div class="checkup-body">
-        <div class="gate-verdict" style="border-color:${passTone};color:${passTone}">
-          <i data-lucide="${report.pass ? "shield-check" : "shield-alert"}"></i>
-          <strong>${report.pass ? "三道闸门全部通过，可以渲染" : "有闸门未通过，建议先修改再渲染"}</strong>
-        </div>
-        ${checksHtml}
-      </div>
-      <div class="checkup-foot gate-foot">${footActions}</div>
-    </div>`;
-
-  mask.addEventListener("click", (event) => {
-    if (event.target === mask) closeGate();
-  });
-  document.body.appendChild(mask);
-  gateMask = mask;
-  document.addEventListener("keydown", onGateKey);
-
-  const closeBtn = mask.querySelector("#gateClose");
-  if (closeBtn) closeBtn.addEventListener("click", closeGate);
-  const closeBtn2 = mask.querySelector("#gateClose2");
-  if (closeBtn2) closeBtn2.addEventListener("click", closeGate);
-  const proceed = mask.querySelector("#gateProceed");
-  if (proceed && onProceed) {
-    proceed.addEventListener("click", () => {
-      closeGate();
-      onProceed();
-    });
-  }
-  if (window.lucide) window.lucide.createIcons();
+  window.dispatchEvent(
+    new CustomEvent("director:open-gate", { detail: { report, onProceed } })
+  );
 }
 
 function openGateStandalone() {
@@ -2850,3 +2689,93 @@ export function bootDirector(skipDraft = false) {
     window.lucide.createIcons();
   }
 }
+
+/* ---- Preact 桥接 API（Phase C：EditorPanel 驱动时间线编辑） ---- */
+
+/**
+ * @typedef {ReturnType<typeof createDirectorApi>} DirectorApi
+ */
+function createDirectorApi() {
+  const sceneAt = (index) => initialState.timeline?.timeline?.[index];
+
+  return {
+    getState() {
+      return {
+        timeline: initialState.timeline,
+        currentScene: initialState.currentScene,
+        assets: initialState.assets,
+        generated: initialState.generated
+      };
+    },
+
+    selectScene(index) {
+      const t = initialState.timeline?.timeline || [];
+      if (!t.length) return;
+      initialState.currentScene = Math.max(0, Math.min(index, t.length - 1));
+      renderAll(false);
+    },
+
+    /** @param {number} index @param {{ title?: string; duration?: number; voiceover?: string; subtitle?: string; visual?: object; metric?: object|null }} patch */
+    patchScene(index, patch) {
+      const scene = sceneAt(index);
+      if (!scene) return;
+      if (patch.title !== undefined) scene.title = patch.title;
+      if (patch.voiceover !== undefined) {
+        scene.voiceover = patch.voiceover;
+        scene.subtitle = patch.subtitle || patch.voiceover;
+      } else if (patch.subtitle !== undefined) {
+        scene.subtitle = patch.subtitle || scene.voiceover;
+      }
+      if (patch.visual) {
+        scene.visual = { ...scene.visual, ...patch.visual };
+      }
+      if (patch.metric !== undefined) {
+        if (patch.metric) scene.visual.metric = patch.metric;
+        else delete scene.visual.metric;
+      }
+      if (patch.duration !== undefined) {
+        scene.duration = Math.max(2, Number(patch.duration) || scene.duration);
+        recalcTimeline();
+      }
+      renderAll(false);
+    },
+
+    async rewriteScene(index) {
+      const scene = sceneAt(index);
+      if (!scene) return;
+      try {
+        await rewriteCurrentScene(scene);
+        renderAll(false);
+      } catch (error) {
+        setCueHint(`重写失败：${error.message}`);
+      }
+    },
+
+    async listenScene(index) {
+      const scene = sceneAt(index);
+      if (!scene) return;
+      try {
+        const src = await synthesizeVoiceover(scene.voiceover, getSelectedVoice());
+        if (ttsAudio) ttsAudio.pause();
+        ttsAudio = new Audio(src);
+        await ttsAudio.play();
+      } catch (error) {
+        setCueHint(`试听失败：${error.message}`);
+      }
+    },
+
+    removeScene(index) {
+      deleteScene(index);
+    },
+
+    moveScene(from, to) {
+      moveScene(from, to);
+    },
+
+    addScene() {
+      addScene();
+    }
+  };
+}
+
+export const directorApi = createDirectorApi();

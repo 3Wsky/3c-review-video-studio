@@ -1,0 +1,17 @@
+[Unit]
+Description=3C CosyVoice2 voice clone (:9233)
+After=network.target
+
+[Service]
+Type=simple
+User=administrator
+WorkingDirectory=/mnt/f/3c-review-video-studio/voice-clone
+Environment=COSYVOICE_DIR=/mnt/f/3c-review-video-studio/voice-clone/CosyVoice
+Environment=MODEL_DIR=/mnt/f/3c-review-video-studio/voice-clone/CosyVoice/pretrained_models/CosyVoice2-0.5B
+Environment=PORT=9233
+ExecStart=/mnt/f/3c-review-video-studio/voice-clone/.venv/bin/python /mnt/f/3c-review-video-studio/voice-clone/server.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

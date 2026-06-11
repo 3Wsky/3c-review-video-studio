@@ -1,6 +1,7 @@
 import { Field, Select, Textarea, Input, FieldGrid } from "../../components/ui/index.js";
 import { useDirectorStore } from "../../store/useDirectorStore.js";
 import { CATEGORY_RULES } from "../../core/constants.js";
+import LegacyExtras from "./LegacyExtras.jsx";
 
 const PLATFORMS = ["抖音 / 快手 9:16", "B站竖屏 9:16", "小红书 3:4", "视频号 9:16"];
 const CATEGORIES = [...new Set(CATEGORY_RULES.map((r) => r.cat))];
@@ -93,6 +94,8 @@ export default function AdvancedSettings() {
           onChange={(e) => persistApiBase(e.currentTarget.value)}
         />
       </Field>
+
+      <LegacyExtras />
     </div>
   );
 }

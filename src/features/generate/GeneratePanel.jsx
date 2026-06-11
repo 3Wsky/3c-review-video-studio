@@ -1,15 +1,15 @@
 import { useEffect } from "preact/hooks";
 import { StageBar } from "../../components/ui/index.js";
 import { useDirectorStore } from "../../store/useDirectorStore.js";
+import { triggerLegacyGenerate } from "../../legacy/store-bridge.js";
 import AdvancedSettings from "./AdvancedSettings.jsx";
 
 export default function GeneratePanel() {
   const productName = useDirectorStore((s) => s.productName);
   const cueHint = useDirectorStore((s) => s.cueHint);
-  const busy = useDirectorStore((s) => s.busy);
   const advancedOpen = useDirectorStore((s) => s.advancedOpen);
   const setField = useDirectorStore((s) => s.setField);
-  const oneClickGenerate = useDirectorStore((s) => s.oneClickGenerate);
+  const busy = useDirectorStore((s) => s.busy);
 
   useEffect(() => {
     const panel = document.getElementById("advPanel");
@@ -21,7 +21,8 @@ export default function GeneratePanel() {
       <StageBar
         productName={productName}
         onProductNameChange={(v) => setField("productName", v)}
-        onGenerate={() => oneClickGenerate()}
+        inputId="productName"
+        onGenerate={() => triggerLegacyGenerate()}
         onToggleAdvanced={() => setField("advancedOpen", !advancedOpen)}
         advancedOpen={advancedOpen}
         hint={cueHint}
@@ -34,6 +35,7 @@ export default function GeneratePanel() {
         {cueHint}
       </p>
       <button id="oneClickBtn" type="button" hidden aria-hidden="true" />
+      <button id="advToggle" type="button" hidden aria-hidden="true" />
     </section>
   );
 }

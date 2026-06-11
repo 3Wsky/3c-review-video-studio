@@ -1,3 +1,5 @@
+import EditorPanel from "../features/editor/EditorPanel.jsx";
+
 export default function ConsoleSection() {
   return (
     <section class="console panel" id="console-section">
@@ -120,49 +122,7 @@ export default function ConsoleSection() {
         </div>
       </div>
 
-      <div class="track-wrap">
-        <div class="track-ruler" id="trackRuler" />
-        <div class="track" id="track" />
-        <p class="track-tip">拖动卡片可调整顺序 · 点击卡片在下方编辑 · 时长按比例显示</p>
-      </div>
-
-      <div class="editor-row">
-        <aside class="preview-col">
-          <div class="scene-nav">
-            <button class="square-button" id="prevSceneBtn" type="button" title="上一镜">
-              <i data-lucide="chevron-left" />
-            </button>
-            <span id="sceneIndicator">1 / 6</span>
-            <button class="square-button" id="nextSceneBtn" type="button" title="下一镜">
-              <i data-lucide="chevron-right" />
-            </button>
-          </div>
-          <div class="phone-frame">
-            <div class="video-stage" id="videoStage">
-              <div class="stage-topline">
-                <span id="stageProduct">3C 产品</span>
-                <span id="stageTime">00:00</span>
-              </div>
-              <div class="product-visual" id="productVisual">
-                <div class="device-placeholder">
-                  <span />
-                </div>
-              </div>
-              <div class="host-slot center" id="hostSlot">
-                <div class="host-head" />
-                <div class="host-body" />
-              </div>
-              <div class="info-card" id="infoCard">
-                <small id="visualType">结论</small>
-                <strong id="visualHeadline">先看结论</strong>
-                <span id="visualDetail">最大优点与最大限制</span>
-              </div>
-              <div class="subtitle-bar" id="subtitleBar" />
-            </div>
-          </div>
-        </aside>
-        <section class="clip-editor" id="clipEditor" />
-      </div>
+      <EditorPanel />
 
       <details class="sources">
         <summary>

@@ -1,4 +1,7 @@
-import { bootDirector } from "./director.js";
+import { bootDirector, directorApi } from "./director.js";
+import { initStoreBridge } from "./store-bridge.js";
+import { initEditorBridge } from "../features/editor/editor-bridge.js";
+import { initQualityBridge } from "../features/quality/quality-bridge.js";
 
 let started = false;
 
@@ -6,5 +9,10 @@ let started = false;
 export function bootDirectorApp() {
   if (started) return;
   started = true;
-  requestAnimationFrame(() => bootDirector());
+  requestAnimationFrame(() => {
+    bootDirector(false);
+    initStoreBridge();
+    initEditorBridge(directorApi);
+    initQualityBridge();
+  });
 }
