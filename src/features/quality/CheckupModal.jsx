@@ -32,6 +32,7 @@ export function CheckupModal({ open, report, onClose }) {
       open={open}
       onClose={onClose}
       title="留人体检"
+      icon={<i data-lucide="stethoscope" />}
       subtitle="按短视频留人逻辑（前 5 秒钩子 + 情绪曲线）给当前脚本打分，仅供参考"
       size="lg"
       className="ds-checkup-modal"

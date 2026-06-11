@@ -20,6 +20,7 @@ export function GateModal({ open, report, allowProceed, onClose, onProceed }) {
       open={open}
       onClose={onClose}
       title="防垃圾质检闸门"
+      icon={<i data-lucide="shield-check" />}
       subtitle="出片前三道闸门：留人体检 · 事实溯源 · 反洗稿。不达标会拦下，可人工放行。"
       size="lg"
       className="ds-gate-modal"
