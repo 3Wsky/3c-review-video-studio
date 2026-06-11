@@ -118,3 +118,95 @@ export function ringDash(frac, radius) {
     dash: round2(clamp01(frac) * circumference)
   };
 }
+
+// ---------- 游戏化扩展（fullspec v1）----------
+
+// 雷达扫描 HUD 的 spec 形 visual.radar = { dims: [{label,value,max}] }
+// → 适配成 dataviz 渲染态（kind:'radar'），复用同一套雷达几何与组件。
+export function radarFromSpec(raw) {
+  if (!raw || !Array.isArray(raw.dims)) return null;
+  return normalizeDataviz({ kind: "radar", items: raw.dims });
+}
+
+// Stat Ring 属性节点：N 等分圆周顶点，默认从 -45°（右上角）起顺时针，
+// 四节点时正好落在四角。返回 [{x,y,angle(deg)}]。
+export function ringNodePoints(count, cx, cy, r, startDeg = -45) {
+  const pts = [];
+  for (let i = 0; i < count; i += 1) {
+    const deg = startDeg + (i * 360) / count;
+    const rad = ((deg - 90) * Math.PI) / 180;
+    pts.push({
+      x: round2(cx + Math.cos(rad) * r),
+      y: round2(cy + Math.sin(rad) * r),
+      angle: round2(deg)
+    });
+  }
+  return pts;
+}
+
+// 对战擂台 Arena PK：把 visual.compare 归一化成「回合制血条对决」。
+// 兼容两形输入：
+//   现有形 { products:[A,B,...], rows:[{label,unit,better,values:[..]}] }（取前两列）
+//   spec 形 { products?, rows:[{dim,a,b,unit,better?}] }
+// 返回 null（数据不足）或：
+//   {
+//     products: [nameA, nameB],
+//     rounds: [{ dim, unit, better, a:{text,value}, b:{text,value},
+//                winner: 0|1|-1, relDiff, critical, damage }],
+//     hp: [[100,100], ...每回合结算后[hpA,hpB]],
+//     verdict: 0|1|-1
+//   }
+// 伤害规则（确定性）：败方扣 round(8 + 22*relDiff)，cap 30；
+// relDiff = |a-b| / max(|a|,|b|)；relDiff > 0.15 触发 CRITICAL；HP 下限 5。
+export function normalizeBattle(raw) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.rows)) return null;
+  const products = (Array.isArray(raw.products) ? raw.products : [])
+    .map((p) => String(p == null ? "" : p).trim())
+    .filter(Boolean);
+  const nameA = products[0] || "本品";
+  const nameB = products[1] || "对手";
+
+  const rounds = raw.rows
+    .map((row) => {
+      const dim = String(row?.dim || row?.label || "").trim();
+      if (!dim) return null;
+      const rawA = row?.a != null ? row.a : Array.isArray(row?.values) ? row.values[0] : null;
+      const rawB = row?.b != null ? row.b : Array.isArray(row?.values) ? row.values[1] : null;
+      const a = toNumber(rawA);
+      const b = toNumber(rawB);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      const better = row?.better === "low" ? "low" : "high";
+      const winner = a === b ? -1 : (better === "low" ? a < b : a > b) ? 0 : 1;
+      const peak = Math.max(Math.abs(a), Math.abs(b));
+      const relDiff = peak > 0 ? Math.abs(a - b) / peak : 0;
+      return {
+        dim,
+        unit: String(row?.unit || "").trim(),
+        better,
+        a: { text: String(rawA).trim(), value: a },
+        b: { text: String(rawB).trim(), value: b },
+        winner,
+        relDiff: round2(relDiff),
+        critical: relDiff > 0.15,
+        damage: winner === -1 ? 0 : Math.min(30, Math.round(8 + 22 * relDiff))
+      };
+    })
+    .filter(Boolean);
+  if (!rounds.length) return null;
+
+  const hp = [[100, 100]];
+  let [hpA, hpB] = hp[0];
+  for (const round of rounds) {
+    if (round.winner === 0) hpB = Math.max(5, hpB - round.damage);
+    else if (round.winner === 1) hpA = Math.max(5, hpA - round.damage);
+    hp.push([hpA, hpB]);
+  }
+
+  const wins = [
+    rounds.filter((r) => r.winner === 0).length,
+    rounds.filter((r) => r.winner === 1).length
+  ];
+  const verdict = wins[0] === wins[1] ? -1 : wins[0] > wins[1] ? 0 : 1;
+
+  return { products: [nameA, nameB], rounds, hp, verdict };
+}

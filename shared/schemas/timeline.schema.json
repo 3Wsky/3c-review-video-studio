@@ -45,7 +45,25 @@
           "visual": {
             "type": "object",
             "properties": {
-              "dataviz": { "$ref": "#/$defs/dataviz" }
+              "type": {
+                "type": "string",
+                "description": "画面类型，自由文本；游戏化特殊值：擂台对决 / 雷达扫描 / 属性觉醒 / 拍摄引导"
+              },
+              "layout": {
+                "type": "string",
+                "enum": ["center", "left", "pip", "none", "pip-br", "fullscreen-hud"]
+              },
+              "headline": { "type": "string" },
+              "detail": { "type": "string" },
+              "asset": { "type": "string" },
+              "cite": { "type": "string" },
+              "metric": { "$ref": "#/$defs/metric" },
+              "compare": { "$ref": "#/$defs/compare" },
+              "radar": { "$ref": "#/$defs/radar" },
+              "dataviz": { "$ref": "#/$defs/dataviz" },
+              "shootGuide": { "$ref": "#/$defs/shootGuide" },
+              "transition": { "$ref": "#/$defs/transition" },
+              "broll": { "$ref": "#/$defs/broll" }
             }
           },
           "checks": { "type": "array", "items": { "type": "string" } },
@@ -55,6 +73,109 @@
     }
   },
   "$defs": {
+    "metric": {
+      "title": "单指标数据卡（数字滚动 + 进度环 / 技能树 Stat Ring）",
+      "type": "object",
+      "required": ["value"],
+      "properties": {
+        "value": { "type": ["number", "string"] },
+        "unit": { "type": "string" },
+        "label": { "type": "string" },
+        "caption": { "type": "string" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "better": { "type": "string", "enum": ["high", "low"] }
+      }
+    },
+    "compare": {
+      "title": "横评对比 / 对战擂台 Arena PK（兼容两形：values 多列 或 a/b 双值）",
+      "type": "object",
+      "required": ["rows"],
+      "properties": {
+        "products": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" }
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "dim": { "type": "string" },
+              "unit": { "type": "string" },
+              "better": { "type": "string", "enum": ["high", "low"] },
+              "values": { "type": "array", "items": { "type": ["number", "string"] } },
+              "a": { "type": ["number", "string"] },
+              "b": { "type": ["number", "string"] }
+            },
+            "anyOf": [
+              { "required": ["label", "values"] },
+              { "required": ["dim", "a", "b"] }
+            ]
+          }
+        }
+      }
+    },
+    "radar": {
+      "title": "五维雷达扫描 Sci-Fi HUD",
+      "type": "object",
+      "required": ["dims"],
+      "properties": {
+        "dims": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": ["label", "value"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "value": { "type": "number" },
+              "max": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "shootGuide": {
+      "title": "拍摄引导 HUD（教用户怎么拍）",
+      "type": "object",
+      "properties": {
+        "angle": { "type": "string", "description": "机位提示，如 45°俯拍·自然光" },
+        "tips": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "checklist 命令式短句，≤12字"
+        },
+        "safeArea": { "type": "string" }
+      }
+    },
+    "transition": {
+      "title": "镜头转场（Beat 切换动效）",
+      "type": "object",
+      "properties": {
+        "in": {
+          "type": "string",
+          "enum": ["glitch-cut", "speed-line", "scan-wipe", "pixel-dissolve", "screen-crack", "iris-close"]
+        },
+        "out": {
+          "type": "string",
+          "enum": ["glitch-cut", "speed-line", "scan-wipe", "pixel-dissolve", "screen-crack", "iris-close"]
+        }
+      }
+    },
+    "broll": {
+      "title": "动态空镜穿插（情绪同向，禁无关风景）",
+      "type": "object",
+      "properties": {
+        "source": { "type": "string", "enum": ["pexels", "pixabay", "user"] },
+        "query": { "type": "string" },
+        "duration": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
     "dataviz": {
       "title": "数据可视化参数卡（动画条形图 / 雷达图 / 进度环）",
       "type": "object",
