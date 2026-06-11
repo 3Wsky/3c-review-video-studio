@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useMemo } from "preact/hooks";
 import {
   normalizeDataviz,
   countUpText,
@@ -6,33 +6,8 @@ import {
   pointsToString,
   ringDash
 } from "../../../shared/dataviz/geometry.mjs";
+import { useEntrance, stagger } from "./use-entrance.js";
 import "./dataviz.css";
-
-// 入场进度 p：0 → 1（easeOutCubic，900ms），sceneKey 变化时重播。
-// 渲染端（批次2）会用 GSAP 逐帧驱动同一套几何，这里只服务网页预览。
-function useEntrance(sceneKey) {
-  const [p, setP] = useState(0);
-  useEffect(() => {
-    let raf;
-    let start;
-    setP(0);
-    const tick = (ts) => {
-      if (start == null) start = ts;
-      const t = Math.min(1, (ts - start) / 900);
-      setP(1 - Math.pow(1 - t, 3));
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [sceneKey]);
-  return p;
-}
-
-// 各条/环错峰入场：第 i 项延迟 i*0.15 后在剩余窗口内走完
-function stagger(p, i) {
-  const delay = i * 0.15;
-  return Math.max(0, Math.min(1, (p - delay) / (1 - delay)));
-}
 
 function BarChart({ viz, p }) {
   return (

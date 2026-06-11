@@ -563,7 +563,11 @@ function normalizeTimelineData(data) {
         asset: scene.visual?.asset || fallback.visual.asset,
         ...(scene.visual?.metric && typeof scene.visual.metric === "object" ? { metric: scene.visual.metric } : {}),
         ...(scene.visual?.compare && typeof scene.visual.compare === "object" ? { compare: scene.visual.compare } : {}),
-        ...(scene.visual?.dataviz && typeof scene.visual.dataviz === "object" ? { dataviz: scene.visual.dataviz } : {})
+        ...(scene.visual?.dataviz && typeof scene.visual.dataviz === "object" ? { dataviz: scene.visual.dataviz } : {}),
+        ...(scene.visual?.transition && typeof scene.visual.transition === "object" ? { transition: scene.visual.transition } : {}),
+        ...(scene.visual?.radar && typeof scene.visual.radar === "object" ? { radar: scene.visual.radar } : {}),
+        ...(scene.visual?.shootGuide && typeof scene.visual.shootGuide === "object" ? { shootGuide: scene.visual.shootGuide } : {}),
+        ...(scene.visual?.broll && typeof scene.visual.broll === "object" ? { broll: scene.visual.broll } : {})
       },
       checks: Array.isArray(scene.checks) ? scene.checks : fallback.checks,
       source: scene.source || "Cloudflare LLM"

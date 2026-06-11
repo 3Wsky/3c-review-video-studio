@@ -170,6 +170,48 @@ export function metricRingFraction(metric, p) {
   return Math.max(0, Math.min(1, target * Math.max(0, Math.min(1, p))));
 }
 
+// 镜头转场（visual.transition）：in/out 必须来自转场库枚举，无效值丢弃；两者皆空 → null。
+export const TRANSITION_KINDS = [
+  "glitch-cut",
+  "speed-line",
+  "scan-wipe",
+  "pixel-dissolve",
+  "screen-crack",
+  "iris-close",
+];
+
+export function normalizeTransition(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const tin = TRANSITION_KINDS.includes(raw.in) ? raw.in : null;
+  const tout = TRANSITION_KINDS.includes(raw.out) ? raw.out : null;
+  return tin || tout ? { in: tin, out: tout } : null;
+}
+
+// 雷达/属性维度（visual.radar = { dims: [{label,value,max}] }）：
+// 至少 3 维有效才成立；frac 分母 = item.max → 全体峰值（兜底 1）。
+// Stat Ring 四角节点与 P2 雷达 HUD 共用这一份。
+export function normalizeRadar(raw) {
+  if (!raw || !Array.isArray(raw.dims)) return null;
+  const dims = raw.dims
+    .map((d) => {
+      const label = String(d?.label || "").trim();
+      const value = toNumber(d?.value);
+      if (!label || !Number.isFinite(value)) return null;
+      const max = toNumber(d?.max);
+      return { label, value, max: Number.isFinite(max) && max > 0 ? max : null };
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+  if (dims.length < 3) return null;
+  const peak = dims.reduce((m, d) => Math.max(m, d.max || Math.abs(d.value)), 0) || 1;
+  return {
+    dims: dims.map((d) => ({
+      ...d,
+      frac: Math.max(0, Math.min(1, d.value / (d.max || peak))),
+    })),
+  };
+}
+
 // 归一化「逐词对齐」时间戳：whisper 转写得到的 token 级 [{ fromMs, toMs }]（相对该镜起点）。
 // 只保留有效区间并按 fromMs 排序；无有效项返回 null（上层回退到线性匀速点亮）。
 export function normalizeCaptions(raw) {
@@ -231,6 +273,10 @@ export function normalizeScenes(timeline) {
       compare: normalizeCompare(visual.compare || scene?.compare),
       // 数卡/单指标镜的进度环数据（visual.metric）；无则不渲染数据卡。
       metric: normalizeMetric(visual.metric || scene?.metric),
+      // 属性维度（Stat Ring 四角节点 / P2 雷达 HUD）。
+      radar: normalizeRadar(visual.radar),
+      // 镜头转场（P0：speed-line / scan-wipe）。
+      transition: normalizeTransition(visual.transition),
       // 逐词对齐时间戳（worker 用 whisper 转写配音后写回）；无则字幕回退线性点亮。
       captions: normalizeCaptions(scene?.captions),
     };

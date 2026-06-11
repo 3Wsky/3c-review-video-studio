@@ -1,0 +1,82 @@
+/* 镜头转场层（visual.transition.in）· P0 先实现 speed-line / scan-wipe
+   覆盖在 .video-stage 上，切镜时重建节点触发一次性 CSS 动画后自然消隐；
+   色值用 --game-* token（设计师 game-tokens.css 就绪后自动生效，fallback 为 spec 色）。 */
+
+.vt-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ---------- speed-line：白色速度线从右往左疾驰 + 开场白闪 ---------- */
+
+.vt-speed-line i {
+  position: absolute;
+  display: block;
+  width: 100%;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent 10%, rgba(255, 255, 255, 0.95) 50%, transparent 90%);
+  transform: translateX(110%);
+  animation: vt-speed 0.42s cubic-bezier(0.16, 0.84, 0.44, 1) forwards;
+}
+
+.vt-speed-line i:nth-child(1) { top: 12%; animation-delay: 0s; }
+.vt-speed-line i:nth-child(2) { top: 26%; height: 3px; animation-delay: 0.05s; }
+.vt-speed-line i:nth-child(3) { top: 43%; animation-delay: 0.02s; }
+.vt-speed-line i:nth-child(4) { top: 58%; height: 1px; animation-delay: 0.08s; }
+.vt-speed-line i:nth-child(5) { top: 74%; height: 3px; animation-delay: 0.04s; }
+.vt-speed-line i:nth-child(6) { top: 88%; animation-delay: 0.1s; }
+
+.vt-speed-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.16);
+  animation: vt-flash 0.4s ease-out forwards;
+}
+
+@keyframes vt-speed {
+  to {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+}
+
+@keyframes vt-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ---------- scan-wipe：HUD 青色扫描线从上掠到底 + 尾迹渐变 ---------- */
+
+.vt-scan-wipe::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 100%;
+  background:
+    linear-gradient(
+      to bottom,
+      transparent calc(100% - 26px),
+      color-mix(in srgb, var(--game-hud-cyan, #00e5ff) 18%, transparent) calc(100% - 3px),
+      var(--game-hud-cyan, #00e5ff) 100%
+    );
+  filter: drop-shadow(0 0 10px var(--game-hud-cyan, #00e5ff));
+  transform: translateY(-100%);
+  animation: vt-scan 0.58s cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+}
+
+@keyframes vt-scan {
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}

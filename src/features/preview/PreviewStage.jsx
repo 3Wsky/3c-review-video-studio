@@ -2,6 +2,11 @@ import { useMemo } from "preact/hooks";
 import { useDirectorStore } from "../../store/useDirectorStore.js";
 import { formatSceneTime } from "./preview-utils.js";
 import DataVizCard from "./DataVizCard.jsx";
+import StatRingCard from "./StatRingCard.jsx";
+import "./transitions.css";
+
+// P0 先支持两种转场；其余（glitch-cut 等）后续批次补
+const PREVIEW_TRANSITIONS = new Set(["speed-line", "scan-wipe"]);
 
 export default function PreviewStage() {
   const timeline = useDirectorStore((s) => s.timeline);
@@ -20,6 +25,8 @@ export default function PreviewStage() {
 
   const visual = scene?.visual || {};
   const sceneLabel = scene ? `${scene.index} / ${scenes.length}` : `1 / ${Math.max(scenes.length, 1)}`;
+  const sceneKey = scene?.id || String(currentScene);
+  const vtKind = PREVIEW_TRANSITIONS.has(visual.transition?.in) ? visual.transition.in : null;
 
   return (
     <aside class="preview-col">
@@ -58,8 +65,10 @@ export default function PreviewStage() {
             <div class="host-body" />
           </div>
 
-          {visual.dataviz ? (
-            <DataVizCard dataviz={visual.dataviz} sceneKey={scene?.id || currentScene} />
+          {visual.metric ? (
+            <StatRingCard metric={visual.metric} radar={visual.radar} sceneKey={sceneKey} />
+          ) : visual.dataviz ? (
+            <DataVizCard dataviz={visual.dataviz} sceneKey={sceneKey} />
           ) : (
             <div class="info-card" id="infoCard">
               <small id="visualType">{visual.type || "结论"}</small>
@@ -71,6 +80,15 @@ export default function PreviewStage() {
           <div class="subtitle-bar" id="subtitleBar">
             {scene?.subtitle || ""}
           </div>
+
+          {vtKind === "speed-line" ? (
+            <div class="vt-layer vt-speed-line" key={`${sceneKey}-sl`} aria-hidden="true">
+              <i /><i /><i /><i /><i /><i />
+            </div>
+          ) : null}
+          {vtKind === "scan-wipe" ? (
+            <div class="vt-layer vt-scan-wipe" key={`${sceneKey}-sw`} aria-hidden="true" />
+          ) : null}
         </div>
       </div>
     </aside>

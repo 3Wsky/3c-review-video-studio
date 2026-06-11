@@ -121,6 +121,30 @@ export function ringDash(frac, radius) {
 
 // ---------- 游戏化扩展（fullspec v1）----------
 
+// 单指标数据卡 visual.metric → 渲染态（与 remotion/scene-model.mjs 的 normalizeMetric 语义对齐）。
+// value 解析不出数 → null；给了 max(>min) 时 frac=(value-min)/(max-min)，否则 frac=null（装饰性满环）。
+export function normalizeMetric(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = toNumber(raw.value);
+  if (!Number.isFinite(value)) return null;
+  const valueText = String(raw.value == null ? value : raw.value).trim() || String(value);
+  const minRaw = toNumber(raw.min);
+  const min = Number.isFinite(minRaw) ? minRaw : 0;
+  const maxRaw = toNumber(raw.max);
+  const hasMax = Number.isFinite(maxRaw) && maxRaw > min;
+  return {
+    value,
+    valueText,
+    unit: String(raw.unit || "").trim(),
+    label: String(raw.label || "").trim(),
+    caption: String(raw.caption || "").trim(),
+    min,
+    max: hasMax ? maxRaw : null,
+    better: raw.better === "low" ? "low" : "high",
+    frac: hasMax ? clamp01((value - min) / (maxRaw - min)) : null
+  };
+}
+
 // 雷达扫描 HUD 的 spec 形 visual.radar = { dims: [{label,value,max}] }
 // → 适配成 dataviz 渲染态（kind:'radar'），复用同一套雷达几何与组件。
 export function radarFromSpec(raw) {
@@ -142,6 +166,40 @@ export function ringNodePoints(count, cx, cy, r, startDeg = -45) {
     });
   }
   return pts;
+}
+
+// 镜头转场（visual.transition）存储形校验：in/out 必须来自转场库，两者皆无 → null。
+export const TRANSITION_KINDS = [
+  "glitch-cut",
+  "speed-line",
+  "scan-wipe",
+  "pixel-dissolve",
+  "screen-crack",
+  "iris-close"
+];
+
+export function sanitizeTransition(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const tin = TRANSITION_KINDS.includes(raw.in) ? raw.in : null;
+  const tout = TRANSITION_KINDS.includes(raw.out) ? raw.out : null;
+  if (!tin && !tout) return null;
+  return { ...(tin ? { in: tin } : {}), ...(tout ? { out: tout } : {}) };
+}
+
+// 属性维度（visual.radar = { dims: [{label,value,max?}] }）存储形校验：≥3 维有效才保留。
+export function sanitizeRadar(raw) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.dims)) return null;
+  const dims = raw.dims
+    .map((d) => {
+      const label = String(d?.label || "").trim();
+      const value = toNumber(d?.value);
+      if (!label || !Number.isFinite(value)) return null;
+      const max = toNumber(d?.max);
+      return { label, value, ...(Number.isFinite(max) && max > 0 ? { max } : {}) };
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+  return dims.length >= 3 ? { dims } : null;
 }
 
 // 对战擂台 Arena PK：把 visual.compare 归一化成「回合制血条对决」。

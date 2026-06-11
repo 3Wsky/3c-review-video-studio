@@ -10,10 +10,60 @@ import {
   formatCountUp,
   normalizeMetric,
   metricRingFraction,
+  normalizeTransition,
+  normalizeRadar,
   buildComposition,
   resolveFormat,
   FPS,
 } from "../src/scene-model.mjs";
+
+test("normalizeTransition 只接受转场库枚举，两者皆无 → null", () => {
+  assert.deepEqual(normalizeTransition({ in: "speed-line", out: "scan-wipe" }), {
+    in: "speed-line",
+    out: "scan-wipe",
+  });
+  assert.deepEqual(normalizeTransition({ in: "不存在", out: "scan-wipe" }), {
+    in: null,
+    out: "scan-wipe",
+  });
+  assert.equal(normalizeTransition({ in: "不存在" }), null);
+  assert.equal(normalizeTransition(null), null);
+});
+
+test("normalizeRadar 至少 3 维有效，frac 按 max（缺省取峰值）", () => {
+  const r = normalizeRadar({
+    dims: [
+      { label: "性能", value: 8, max: 10 },
+      { label: "续航", value: 9, max: 10 },
+      { label: "屏幕", value: 7 }, // 无 max → 分母取峰值 10
+    ],
+  });
+  assert.equal(r.dims.length, 3);
+  assert.equal(r.dims[0].frac, 0.8);
+  assert.equal(r.dims[2].frac, 0.7);
+  assert.equal(normalizeRadar({ dims: [{ label: "a", value: 1 }, { label: "b", value: 2 }] }), null);
+  assert.equal(normalizeRadar(null), null);
+});
+
+test("normalizeScenes 透传 transition 与 radar（无效 → null）", () => {
+  const s = normalizeScenes({
+    timeline: [
+      {
+        duration: 5,
+        visual: {
+          headline: "x",
+          transition: { in: "speed-line" },
+          radar: { dims: [{ label: "a", value: 1 }, { label: "b", value: 2 }, { label: "c", value: 3 }] },
+        },
+      },
+      { duration: 5, visual: { headline: "y" } },
+    ],
+  });
+  assert.equal(s[0].transition.in, "speed-line");
+  assert.equal(s[0].radar.dims.length, 3);
+  assert.equal(s[1].transition, null);
+  assert.equal(s[1].radar, null);
+});
 
 test("normalizeScenes 累加起始时间、兜底时长", () => {
   const tl = {

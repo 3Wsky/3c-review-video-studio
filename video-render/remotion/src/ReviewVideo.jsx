@@ -254,10 +254,12 @@ function CompareMatrix({ scene, formatKey, localTime }) {
   );
 }
 
-// 数卡/单指标镜：居中进度环 + 大数字滚动入场。
+// 数卡/单指标镜 · 技能树 Stat Ring：居中经验环 + 大数字滚动入场，
 // 环按 metricRingFraction 从 0 长到目标占比（给了 max 时按 value/max，否则装饰性扫满一圈）；
 // 大数字用 formatCountUp 从 0 滚到目标值，到位时轻微回弹强调。label 在上、caption 在下。
-function MetricCard({ metric, localTime, lay }) {
+// 游戏化升级（fullspec P0-②）：带 radar.dims 时环外四角属性节点依次点亮 + 「解锁」横幅压轴；
+// 无 radar 时即原单环数据卡（fallback）。
+function MetricCard({ metric, radar, localTime, lay }) {
   const cardP = enter(localTime, 0.35, 0.5, "power3.out");
   const ringP = enter(localTime, 0.55, 0.8, "power2.out");
   const numP = enter(localTime, 0.55, 0.9, "power1.out");
@@ -270,6 +272,16 @@ function MetricCard({ metric, localTime, lay }) {
   const frac = metricRingFraction(metric, ringP);
   const accent = metric.better === "low" ? "#7ee0c0" : "#ffd166";
   const rollNum = formatCountUp(metric.valueText, metric.value, numP);
+
+  // 四角属性节点（-45° 起 N 等分，几何与 shared/dataviz/geometry.ringNodePoints 对齐）
+  const nodes = radar ? radar.dims.slice(0, 4) : [];
+  const nodeR = r + stroke + 6;
+  const nodePts = nodes.map((_, i) => {
+    const deg = -45 + (i * 360) / nodes.length;
+    const rad = ((deg - 90) * Math.PI) / 180;
+    return { x: size / 2 + Math.cos(rad) * nodeR, y: size / 2 + Math.sin(rad) * nodeR };
+  });
+  const bannerP = enter(localTime, 1.0 + nodes.length * 0.2 + 0.3, 0.5, "power3.out");
 
   return (
     <div
@@ -306,6 +318,49 @@ function MetricCard({ metric, localTime, lay }) {
             strokeDasharray={`${circ * frac} ${circ}`}
           />
         </svg>
+        {nodes.map((d, i) => {
+          const litP = enter(localTime, 1.0 + i * 0.2, 0.35, "power3.out");
+          const pt = nodePts[i];
+          const dotR = Math.max(10, Math.round(size * 0.045));
+          return (
+            <div
+              key={d.label}
+              style={{
+                position: "absolute",
+                left: pt.x,
+                top: pt.y,
+                transform: `translate(-50%, -50%) scale(${0.4 + 0.6 * litP})`,
+                opacity: 0.25 + 0.75 * litP,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <div
+                style={{
+                  width: dotR * 2,
+                  height: dotR * 2,
+                  borderRadius: "50%",
+                  background: litP > 0.5 ? "#c77dff" : "rgba(255,255,255,0.14)",
+                  border: `2px solid ${litP > 0.5 ? "#fff" : "rgba(255,255,255,0.25)"}`,
+                  boxShadow: litP > 0.5 ? "0 0 16px #c77dff" : "none",
+                }}
+              />
+              <span
+                style={{
+                  fontSize: Math.max(20, Math.round(size * 0.075)),
+                  fontWeight: 700,
+                  color: litP > 0.5 ? "#fff" : "rgba(198,207,230,0.5)",
+                  whiteSpace: "nowrap",
+                  textShadow: "0 2px 8px rgba(0,0,0,0.7)",
+                }}
+              >
+                {d.label}
+              </span>
+            </div>
+          );
+        })}
         <div
           style={{
             position: "absolute",
@@ -354,8 +409,98 @@ function MetricCard({ metric, localTime, lay }) {
           {metric.caption}
         </div>
       ) : null}
+
+      {nodes.length ? (
+        <div
+          style={{
+            padding: "12px 44px",
+            borderRadius: 999,
+            fontSize: Math.max(26, Math.round(size * 0.09)),
+            fontWeight: 800,
+            letterSpacing: 2,
+            color: "#10131a",
+            background: "linear-gradient(90deg, #ffd700, #ffe680)",
+            boxShadow: "0 0 28px rgba(255,215,0,0.5)",
+            opacity: bannerP,
+            transform: `translateY(${26 * (1 - bannerP)}px)`,
+          }}
+        >
+          ⬡ {metric.label || "属性"} · 解锁
+        </div>
+      ) : null}
     </div>
   );
+}
+
+// 镜头转场层（scene.transition.in）· P0：speed-line / scan-wipe。
+// 与网页预览 transitions.css 的动效语义一致，这里用帧插值实现（确定性逐帧渲染）。
+const SPEED_LINES = [
+  { top: 0.12, h: 3, delay: 0 },
+  { top: 0.26, h: 5, delay: 0.05 },
+  { top: 0.43, h: 3, delay: 0.02 },
+  { top: 0.58, h: 2, delay: 0.08 },
+  { top: 0.74, h: 5, delay: 0.04 },
+  { top: 0.88, h: 3, delay: 0.1 },
+];
+
+function TransitionLayer({ kind, localTime }) {
+  const { width, height } = useVideoConfig();
+  if (localTime > 1) return null;
+
+  if (kind === "speed-line") {
+    const flash = 1 - enter(localTime, 0, 0.4, "power2.out");
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
+        {SPEED_LINES.map((line, i) => {
+          const p = enter(localTime, line.delay, 0.42, "power2.out");
+          if (p >= 1) return null;
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                top: line.top * height,
+                left: 0,
+                width: width,
+                height: line.h,
+                borderRadius: line.h,
+                background:
+                  "linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.95) 50%, transparent 90%)",
+                transform: `translateX(${(1.1 - 2.3 * p) * width}px)`,
+                opacity: 1 - Math.max(0, p - 0.7) / 0.3,
+              }}
+            />
+          );
+        })}
+        <AbsoluteFill style={{ background: "#fff", opacity: 0.16 * flash }} />
+      </AbsoluteFill>
+    );
+  }
+
+  if (kind === "scan-wipe") {
+    const p = enter(localTime, 0, 0.58, "power2.out");
+    if (p >= 1) return null;
+    const y = (-1 + 2 * p) * height;
+    const fade = 1 - Math.max(0, p - 0.85) / 0.15;
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden", opacity: fade }}>
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: y,
+            height: height,
+            background:
+              "linear-gradient(to bottom, transparent 88%, rgba(0,229,255,0.18) 98%, #00e5ff 100%)",
+            filter: "drop-shadow(0 0 18px #00e5ff)",
+          }}
+        />
+      </AbsoluteFill>
+    );
+  }
+
+  return null;
 }
 
 function Scene({ scene, formatKey, assetMap }) {
@@ -492,7 +637,7 @@ function Scene({ scene, formatKey, assetMap }) {
         ) : null}
 
         {!scene.compare && scene.metric ? (
-          <MetricCard metric={scene.metric} localTime={t} lay={metricLay} />
+          <MetricCard metric={scene.metric} radar={scene.radar} localTime={t} lay={metricLay} />
         ) : null}
 
         {scene.subtitle ? (
@@ -556,6 +701,9 @@ function Scene({ scene, formatKey, assetMap }) {
           </div>
         ) : null}
       </AbsoluteFill>
+
+      {/* 转场层（最顶）：入场动效，~0.6s 内自然消隐 */}
+      {scene.transition?.in ? <TransitionLayer kind={scene.transition.in} localTime={t} /> : null}
     </AbsoluteFill>
   );
 }
