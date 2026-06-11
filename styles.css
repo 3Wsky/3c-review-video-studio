@@ -62,6 +62,42 @@ button {
   backdrop-filter: blur(16px);
 }
 
+.phase-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(8, 8, 14, 0.85);
+  position: sticky;
+  top: 76px;
+  z-index: 19;
+  backdrop-filter: blur(12px);
+}
+
+.phase-pill {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.phase-pill:hover {
+  color: var(--text);
+  border-color: rgba(177, 107, 255, 0.45);
+}
+
+.phase-pill.active {
+  color: #fff;
+  border-color: transparent;
+  background: var(--accent-grad);
+  box-shadow: 0 4px 14px rgba(177, 107, 255, 0.35);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -2038,3 +2074,288 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   line-height: 1.55;
   border-top: 1px solid var(--line);
 }
+
+/* ============ 道法起片过场动画 (Taoist Transition Animation) ============ */
+.tao-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background-color: #04040a;
+  background-image: radial-gradient(circle at 50% 50%, rgba(15, 10, 30, 0.95) 0%, #04040a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  font-family: var(--ds-font-sans, inherit);
+  overflow: hidden;
+  transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tao-overlay[hidden] {
+  display: none !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tao-bg-effects {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tao-taichi-svg {
+  width: min(600px, 80vw);
+  height: min(600px, 80vw);
+  animation: tao-spin 30s linear infinite;
+  filter: blur(1px) drop-shadow(0 0 30px rgba(177, 107, 255, 0.15));
+}
+
+@keyframes tao-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.tao-glow-ring {
+  position: absolute;
+  width: min(450px, 60vw);
+  height: min(450px, 60vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(177, 107, 255, 0.08) 0%, transparent 70%);
+  animation: tao-pulse 4s ease-in-out infinite alternate;
+}
+
+@keyframes tao-pulse {
+  0% { transform: scale(0.95); opacity: 0.6; }
+  100% { transform: scale(1.05); opacity: 1; }
+}
+
+.tao-sparkles {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    radial-gradient(circle at 75% 40%, rgba(177, 107, 255, 0.15) 1.5px, transparent 1.5px),
+    radial-gradient(circle at 40% 80%, rgba(255, 77, 157, 0.1) 1px, transparent 1px),
+    radial-gradient(circle at 10% 70%, rgba(111, 123, 255, 0.12) 2px, transparent 2px),
+    radial-gradient(circle at 90% 15%, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 100% 100%;
+  opacity: 0.8;
+  animation: tao-float 8s ease-in-out infinite alternate;
+}
+
+@keyframes tao-float {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(-15px) scale(1.02); }
+}
+
+.tao-container {
+  position: relative;
+  z-index: 10;
+  width: min(800px, 90vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  text-align: center;
+}
+
+.tao-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tao-title-main {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  background: linear-gradient(135deg, #ff4d9d 0%, #b16bff 50%, #6f7bff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 40px rgba(177, 107, 255, 0.3);
+  animation: tao-glow-text 3s ease-in-out infinite alternate;
+}
+
+@keyframes tao-glow-text {
+  0% { filter: drop-shadow(0 0 10px rgba(177, 107, 255, 0.2)); }
+  100% { filter: drop-shadow(0 0 25px rgba(177, 107, 255, 0.5)); }
+}
+
+.tao-subtitle {
+  font-size: 16px;
+  color: #fbbf24; /* Gold color for mysterious vibe */
+  font-weight: 600;
+  letter-spacing: 1px;
+  min-height: 24px;
+  transition: all 0.5s ease;
+}
+
+.tao-stage-container {
+  width: 100%;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.tao-stage {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  animation: tao-fade-in 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes tao-fade-in {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* 一生二 动画 */
+.tao-stage-row {
+  display: flex;
+  justify-content: center;
+  gap: min(100px, 10vw);
+  width: 100%;
+  position: relative;
+}
+
+/* 二生三 动画 */
+.tao-stage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  width: 100%;
+  max-width: 640px;
+  position: relative;
+}
+
+.tao-node-center {
+  grid-column: span 2;
+  justify-self: center;
+  margin-top: 10px;
+}
+
+/* 节点设计 */
+.tao-node {
+  background: rgba(15, 15, 25, 0.85);
+  border: 1px solid rgba(177, 107, 255, 0.25);
+  border-radius: 16px;
+  padding: 20px;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(177, 107, 255, 0.1);
+  transition: all 0.4s ease;
+  position: relative;
+}
+
+.tao-node:hover {
+  border-color: var(--ds-accent);
+  box-shadow: 0 15px 35px rgba(177, 107, 255, 0.2), inset 0 0 20px rgba(177, 107, 255, 0.15);
+  transform: translateY(-2px);
+}
+
+.tao-node-pulse {
+  position: absolute;
+  width: 280px;
+  height: 180px;
+  border-radius: 20px;
+  border: 2px solid var(--ds-accent);
+  opacity: 0;
+  animation: tao-node-glow-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes tao-node-glow-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 0; }
+}
+
+.tao-node-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  z-index: 2;
+}
+
+.tao-node-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--ds-accent-grad);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 20px rgba(177, 107, 255, 0.5);
+}
+
+.tao-node-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: 1px;
+}
+
+.tao-node-desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* 壹节点特殊样式 */
+.tao-stage-1 .tao-node-content {
+  width: 260px;
+  background: rgba(15, 15, 25, 0.85);
+  border: 1px solid var(--ds-accent);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 15px 40px rgba(177, 107, 255, 0.25);
+}
+
+.tao-footer {
+  margin-top: 10px;
+}
+
+#taoSkipBtn {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+  transition: all 0.3s;
+}
+
+#taoSkipBtn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 响应式适配 */
+@media (max-width: 600px) {
+  .tao-stage-row {
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .tao-stage-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .tao-node-center {
+    grid-column: span 1;
+  }
+  .tao-node {
+    width: 280px;
+  }
+}
+
