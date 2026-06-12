@@ -13,6 +13,8 @@ import {
   normalizeTransition,
   normalizeRadar,
   normalizeDataviz,
+  normalizeShootGuide,
+  isArenaMode,
   buildComposition,
   resolveFormat,
   FPS,
@@ -277,6 +279,71 @@ test("normalizeScenes 透传数卡 metric（visual.metric → null 当无效）"
   assert.equal(s[0].metric.value, 12);
   assert.equal(s[0].metric.frac, 0.75);
   assert.equal(s[1].metric, null);
+});
+
+test("isArenaMode：visual.type 含擂台/PK 或 compare.style==='arena' 触发", () => {
+  assert.equal(isArenaMode({ type: "擂台对决" }, null), true);
+  assert.equal(isArenaMode({ type: "Arena PK" }, null), true);
+  assert.equal(isArenaMode({ type: "横评" }, { style: "arena" }), true);
+  assert.equal(isArenaMode({ type: "横评" }, { style: "table" }), false);
+  assert.equal(isArenaMode({}, null), false);
+});
+
+test("normalizeShootGuide：title/steps 必有其一，frame 缺省与 0-1 钳制", () => {
+  // tips 作为 steps 别名；frame 缺省
+  const g = normalizeShootGuide({ title: "拍正面特写", tips: ["对准 Logo", "稳 2 秒"], angle: "45°俯拍" });
+  assert.equal(g.title, "拍正面特写");
+  assert.deepEqual(g.steps, ["对准 Logo", "稳 2 秒"]);
+  assert.equal(g.angle, "45°俯拍");
+  assert.equal(g.variant, "product_macro"); // 缺省
+  assert.deepEqual(g.frame, { x: 0.12, y: 0.18, w: 0.76, h: 0.52 });
+  // 显式 variant + frame（越界值钳到 [0,1]）
+  const g2 = normalizeShootGuide({
+    title: "对比",
+    variant: "comparison",
+    steps: ["左右各放一台"],
+    frame: { x: -1, y: 0.2, w: 2, h: 0.4 },
+  });
+  assert.equal(g2.variant, "comparison");
+  assert.deepEqual(g2.frame, { x: 0, y: 0.2, w: 1, h: 0.4 });
+  // 非法 variant 回退缺省；title/steps 全空 → null
+  assert.equal(normalizeShootGuide({ variant: "xxx", title: "t" }).variant, "product_macro");
+  assert.equal(normalizeShootGuide({ steps: [] }), null);
+  assert.equal(normalizeShootGuide(null), null);
+});
+
+test("normalizeScenes：擂台镜归一为 battle 且 compare 置空（互斥）", () => {
+  const s = normalizeScenes({
+    timeline: [
+      {
+        duration: 6,
+        visual: {
+          type: "擂台对决",
+          compare: {
+            products: ["本品", "对手"],
+            rows: [
+              { dim: "续航", a: 12, b: 8, unit: "h", better: "high" },
+              { dim: "价格", a: 1999, b: 2499, unit: "元", better: "low" },
+            ],
+          },
+        },
+      },
+      {
+        duration: 5,
+        visual: { type: "拍摄引导", headline: "拍正面", detail: "对准 Logo" },
+      },
+    ],
+  });
+  // 擂台镜：battle 有数据、compare 互斥置空、verdict=本品(0)
+  assert.equal(s[0].compare, null);
+  assert.ok(s[0].battle);
+  assert.deepEqual(s[0].battle.products, ["本品", "对手"]);
+  assert.equal(s[0].battle.rounds.length, 2);
+  assert.equal(s[0].battle.verdict, 0);
+  // 拍摄引导镜：由 visual.type 触发，headline→title、detail→steps
+  assert.ok(s[1].shootGuide);
+  assert.equal(s[1].shootGuide.title, "拍正面");
+  assert.deepEqual(s[1].shootGuide.steps, ["对准 Logo"]);
 });
 
 test("buildComposition 推导画幅与总帧数", () => {

@@ -12,6 +12,7 @@
 
 import {
   normalizeDataviz,
+  normalizeBattle,
   radarPoints,
   pointsToString,
   ringDash,
@@ -19,7 +20,7 @@ import {
 } from "../../../shared/dataviz/geometry.mjs";
 
 // 复用前端同一份数据可视化几何，供渲染端组件 import（单一来源，避免双份实现漂移）。
-export { normalizeDataviz, radarPoints, pointsToString, ringDash, countUpText };
+export { normalizeDataviz, normalizeBattle, radarPoints, pointsToString, ringDash, countUpText };
 
 export const FPS = 30;
 
@@ -234,6 +235,51 @@ export function normalizeCaptions(raw) {
   return caps.length ? caps : null;
 }
 
+const SHOOT_VARIANTS = ["product_macro", "hand_hold", "comparison", "talking_head"];
+
+function clamp01(n, fallback) {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback;
+}
+
+// 拍摄引导 HUD（visual.shootGuide）：取景框 + checklist + 步骤进度。
+export function normalizeShootGuide(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const title = String(raw.title || "").trim();
+  const steps = (Array.isArray(raw.steps) ? raw.steps : Array.isArray(raw.tips) ? raw.tips : [])
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!title && steps.length === 0) return null;
+  const variant = SHOOT_VARIANTS.includes(raw.variant) ? raw.variant : "product_macro";
+  const frame =
+    raw.frame && typeof raw.frame === "object"
+      ? {
+          x: clamp01(raw.frame.x, 0.12),
+          y: clamp01(raw.frame.y, 0.18),
+          w: clamp01(raw.frame.w, 0.76),
+          h: clamp01(raw.frame.h, 0.52),
+        }
+      : { x: 0.12, y: 0.18, w: 0.76, h: 0.52 };
+  return {
+    variant,
+    title: title || "拍摄引导",
+    steps,
+    angle: String(raw.angle || "").trim(),
+    safeArea: String(raw.safeArea || "").trim(),
+    demoAsset: String(raw.demoAsset || "").trim(),
+    frame,
+  };
+}
+
+// 擂台模式判定（visual.type 含「擂台/arena/pk」或 compare.style==='arena'）。
+// 导出供前端预览 PreviewStage 复用，保证预览端与渲染端 arena/普通横评的分流一致。
+export function isArenaMode(visual, compareRaw) {
+  const type = String(visual?.type || "");
+  if (/擂台|arena|pk/i.test(type)) return true;
+  return compareRaw?.style === "arena";
+}
+
 // 卡拉OK进度：给定 token 时间戳与当前时刻 tMs，返回「已念完的比例」∈[0,1]。
 // 每个 token 等权（只取节奏，不看文字——whisper 中文 token 常是字节碎片）：
 // 已过 toMs 记 1，正处于 [fromMs,toMs) 按时间线性插值，停顿（gap）期间保持不前进。
@@ -269,6 +315,14 @@ export function normalizeScenes(timeline) {
     const start = cursor;
     cursor += duration;
     const visual = scene?.visual || {};
+    const compareRaw = visual.compare || scene?.compare;
+    const arena = isArenaMode(visual, compareRaw);
+    const battle = arena ? normalizeBattle(compareRaw) : null;
+    const shootGuide =
+      normalizeShootGuide(visual.shootGuide) ||
+      (/拍摄引导/i.test(String(visual.type || ""))
+        ? normalizeShootGuide({ title: visual.headline || "拍摄引导", tips: [visual.detail].filter(Boolean) })
+        : null);
     return {
       id: `scene-${i + 1}`,
       index: i + 1,
@@ -281,7 +335,9 @@ export function normalizeScenes(timeline) {
       asset: String(visual.asset || "").trim() || null,
       cite: String(visual.cite || scene?.cite || "").trim(),
       stock: visual.assetSource === "stock",
-      compare: normalizeCompare(visual.compare || scene?.compare),
+      compare: battle ? null : normalizeCompare(compareRaw),
+      battle,
+      shootGuide,
       // 数卡/单指标镜的进度环数据（visual.metric）；无则不渲染数据卡。
       metric: normalizeMetric(visual.metric || scene?.metric),
       // 数据可视化参数卡（visual.dataviz：bar/radar/ring），与前端 DataVizCard 共用同一几何。

@@ -11,12 +11,14 @@ export async function onRequestGet(context) {
   const zhihuOk = Boolean(env.ZHIHU_ACCESS_SECRET);
   const renderUrl = (env.RENDER_URL || "").replace(/\/$/, "");
   const voiceUrl = (env.VOICE_CLONE_URL || "").replace(/\/$/, "");
+  const agnesOk = Boolean(env.AGNES_API_KEY);
 
   const probes = {
     llm: llmOk ? "configured" : "missing",
     zhihu: zhihuOk ? "configured" : "missing",
     render: renderUrl ? "configured" : "missing",
-    voiceClone: voiceUrl ? "configured" : "missing"
+    voiceClone: voiceUrl ? "configured" : "missing",
+    agnes: agnesOk ? "configured" : "missing"
   };
 
   return jsonResponse({

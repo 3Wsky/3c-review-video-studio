@@ -26,6 +26,8 @@ const BASE = {
     radarSize: 420,
     radarPad: 70,
   },
+  arena: { top: 180, left: 56, right: 56, titleSize: 36, hpHeight: 28, vsSize: 64 },
+  shootGuide: { headerH: 72, checklistW: 280 },
 };
 
 const OVERRIDES = {
@@ -39,6 +41,7 @@ const OVERRIDES = {
     cite: { bottom: 56 },
     metric: { top: 300, ring: 300, valueSize: 116, unitSize: 44 },
     dataviz: { top: 300, left: 360, right: 360, ringSize: 200, radarSize: 380, radarPad: 64 },
+    arena: { top: 140, left: 200, right: 200 },
   },
   "1:1": {
     badge: { top: 52 },
@@ -48,6 +51,7 @@ const OVERRIDES = {
     subtitle: { bottom: 90 },
     metric: { top: 360, ring: 320, valueSize: 120 },
     dataviz: { top: 380, left: 80, right: 80, ringSize: 200, radarSize: 400, radarPad: 66 },
+    arena: { top: 160, left: 48, right: 48 },
   },
 };
 

@@ -92,6 +92,11 @@
       "type": "object",
       "required": ["rows"],
       "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["table", "arena"],
+          "description": "arena 渲染为擂台 PK 血条对决（亦可由 visual.type 含「擂台/PK」触发）"
+        },
         "products": {
           "type": "array",
           "minItems": 2,
@@ -144,13 +149,36 @@
       "title": "拍摄引导 HUD（教用户怎么拍）",
       "type": "object",
       "properties": {
-        "angle": { "type": "string", "description": "机位提示，如 45°俯拍·自然光" },
+        "variant": {
+          "type": "string",
+          "enum": ["product_macro", "hand_hold", "comparison", "talking_head"],
+          "description": "拍摄变体，决定取景框示范样式（缺省 product_macro）"
+        },
+        "title": { "type": "string", "description": "指令主文案，如「拍一张正面特写」" },
+        "steps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 6,
+          "description": "checklist 命令式短句，≤12字（兼容旧字段 tips）"
+        },
         "tips": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "checklist 命令式短句，≤12字"
+          "description": "已弃用别名，等价于 steps"
         },
-        "safeArea": { "type": "string" }
+        "angle": { "type": "string", "description": "机位提示，如 45°俯拍·自然光" },
+        "safeArea": { "type": "string" },
+        "demoAsset": { "type": "string", "description": "左下示范小窗素材路径" },
+        "frame": {
+          "type": "object",
+          "description": "取景框相对坐标（0–1），适配不同分辨率",
+          "properties": {
+            "x": { "type": "number", "minimum": 0, "maximum": 1 },
+            "y": { "type": "number", "minimum": 0, "maximum": 1 },
+            "w": { "type": "number", "minimum": 0, "maximum": 1 },
+            "h": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
       }
     },
     "transition": {
