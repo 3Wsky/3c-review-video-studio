@@ -47,6 +47,7 @@
 
   --ds-weight-normal: 400;
   --ds-weight-medium: 600;
+  --ds-weight-semibold: 650;
   --ds-weight-bold: 700;
   --ds-weight-heavy: 750;
   --ds-weight-black: 800;
@@ -86,9 +87,26 @@
 
   /* ── 动效 ── */
   --ds-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ds-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ds-duration-fast: 0.12s;
   --ds-duration-normal: 0.16s;
   --ds-duration-slow: 0.24s;
+  --ds-duration-enter: 0.28s;
+
+  /* ── 滚动条（暗色） ── */
+  --ds-scrollbar-track: rgba(255, 255, 255, 0.04);
+  --ds-scrollbar-thumb: rgba(177, 107, 255, 0.35);
+  --ds-scrollbar-thumb-hover: rgba(177, 107, 255, 0.55);
+
+  /* ── 断点（供文档/JS 引用） ── */
+  --ds-bp-sm: 640px;
+  --ds-bp-md: 820px;
+  --ds-bp-lg: 1180px;
+
+  /* ── 交互表面 ── */
+  --ds-surface-hover: rgba(255, 255, 255, 0.06);
+  --ds-surface-active: rgba(255, 255, 255, 0.09);
 
   /* ── 布局 ── */
   --ds-topbar-height: 76px;

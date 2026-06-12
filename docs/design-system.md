@@ -333,24 +333,42 @@ import {
 
 ---
 
-## 7. 文件索引
+## 7. 游戏化扩展（Game Tokens）
+
+测评视频游戏化 HUD / 数据卡 / 转场专用令牌，在 `--ds-*` 之上扩展 `--game-*` 命名空间。
+
+| 文档 | 路径 |
+|------|------|
+| 批次1 完整 spec（Token + 素材 + 线框） | `docs/game-design-batch1.md` |
+| 批次2 拍摄引导 HUD 线框 | `docs/game-design-batch2-shoot-guide.md` |
+| CSS 令牌源 | `src/design/game-tokens.css` |
+| 素材落盘目录（架构师） | `public/game-assets/` |
+
+**字体**：Orbitron（大数字）· Rajdhani（HUD 标签）· Share Tech Mono（参数值）
+
+---
+
+## 8. 文件索引
 
 ```
 src/design/
-  tokens.css      ← CSS 变量（权威源）
-  tokens.js       ← JS 导出
-  base.css        ← reset + body
-  components.css  ← ds- 共享样式
-  index.css       ← 样式总入口
+  tokens.css        ← CSS 变量（权威源）
+  game-tokens.css   ← 游戏化 HUD 令牌
+  tokens.js         ← JS 导出
+  base.css          ← reset + body
+  components.css    ← ds- 共享样式
+  polish.css        ← 动效打磨层
+  index.css         ← 样式总入口
 
 src/components/ui/
   Button.jsx … UploadZone.jsx
-  index.js        ← 组件 barrel export
+  index.js          ← 组件 barrel export
 
 docs/
-  design-system.md  ← 本文档
+  design-system.md      ← 本文档
+  game-design-batch1.md ← 游戏化批次1交付
 ```
 
 ---
 
-*维护：UX/UI 设计师 · 2026-06-11 · Round 1 T3*
+*维护：UX/UI 设计师 · 2026-06-11 · Round 1 T3 + 游戏化批次1*

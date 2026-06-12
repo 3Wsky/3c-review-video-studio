@@ -1,0 +1,143 @@
+/**
+ * 3C Review Video Studio — Game Tokens
+ * 游戏化测评视频 HUD / 数据卡 / 转场 专用令牌层
+ * 在 --ds-* 暗色霓虹品牌之上扩展，供预览舞台与渲染端共用。
+ *
+ * 字体引入策略见 docs/game-design-batch1.md §1.2
+ */
+
+/* ── 游戏化字体（CDN；生产渲染请换 public/fonts/game/ 本地 woff2） ── */
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap");
+
+:root {
+  /* ── HUD 语义色（科幻 HUD 青/品红/金，与品牌紫并存） ── */
+  --game-hud-cyan: #00e5ff;
+  --game-hud-cyan-dim: rgba(0, 229, 255, 0.35);
+  --game-hud-cyan-glow: rgba(0, 229, 255, 0.55);
+  --game-hud-magenta: #ff2d95;
+  --game-hud-magenta-dim: rgba(255, 45, 149, 0.35);
+  --game-hud-magenta-glow: rgba(255, 45, 149, 0.5);
+  --game-hud-gold: #ffd166;
+  --game-hud-gold-dim: rgba(255, 209, 102, 0.28);
+  --game-hud-gold-glow: rgba(255, 209, 102, 0.45);
+  --game-hud-lime: #7ee0c0;
+  --game-hud-lime-dim: rgba(126, 224, 192, 0.3);
+  --game-hud-red: #ff4d6a;
+  --game-hud-red-dim: rgba(255, 77, 106, 0.35);
+  --game-hud-red-glow: rgba(255, 77, 106, 0.55);
+
+  /* ── 擂台 PK 专用 ── */
+  --game-pk-left: var(--game-hud-cyan);
+  --game-pk-left-bg: rgba(0, 229, 255, 0.12);
+  --game-pk-right: var(--game-hud-magenta);
+  --game-pk-right-bg: rgba(255, 45, 149, 0.12);
+  --game-pk-vs: var(--game-hud-gold);
+  --game-damage-pop: #fff5e6;
+  --game-damage-crit: var(--game-hud-gold);
+
+  /* ── HUD 面板与扫描线 ── */
+  --game-panel-bg: rgba(6, 10, 18, 0.88);
+  --game-panel-border: rgba(0, 229, 255, 0.28);
+  --game-panel-corner: var(--game-hud-cyan);
+  --game-scanline: rgba(0, 229, 255, 0.08);
+  --game-grid: rgba(255, 255, 255, 0.06);
+  --game-vignette: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.72) 100%);
+
+  /* ── 属性环 Stat Ring ── */
+  --game-ring-track: rgba(255, 255, 255, 0.1);
+  --game-ring-fill: var(--game-hud-gold);
+  --game-ring-glow: 0 0 24px var(--game-hud-gold-glow);
+  --game-ring-node-on: var(--game-hud-cyan);
+  --game-ring-node-off: rgba(255, 255, 255, 0.18);
+  --game-stat-value: #ffffff;
+  --game-stat-unit: var(--game-hud-gold);
+
+  /* ── 雷达 HUD ── */
+  --game-radar-grid: rgba(0, 229, 255, 0.15);
+  --game-radar-sweep: linear-gradient(90deg, transparent, var(--game-hud-cyan-glow), transparent);
+  --game-radar-vertex: var(--game-hud-lime);
+
+  /* ── 拍摄引导 HUD ── */
+  --game-frame-stroke: var(--game-hud-cyan);
+  --game-frame-corner-len: 28px;
+  --game-crosshair: var(--game-hud-gold);
+  --game-guide-text: #e8f4ff;
+  --game-guide-check: var(--game-hud-lime);
+
+  /* ── 转场效果参数 ── */
+  --game-glitch-shift: 6px;
+  --game-glitch-color-a: var(--game-hud-magenta);
+  --game-glitch-color-b: var(--game-hud-cyan);
+  --game-speedline-color: rgba(255, 255, 255, 0.65);
+  --game-speedline-angle: -12deg;
+  --game-scan-wipe-width: 18%;
+  --game-scan-wipe-color: var(--game-hud-cyan-glow);
+  --game-pixel-dissolve-size: 8px;
+
+  /* ── 游戏化字体族 ── */
+  --game-font-display: "Orbitron", var(--ds-font-sans);
+  --game-font-hud: "Rajdhani", var(--ds-font-sans);
+  --game-font-mono: "Share Tech Mono", var(--ds-font-mono);
+
+  /* ── 游戏化字号（视频 1080p 基准，预览舞台等比缩放） ── */
+  --game-text-hero: 96px;
+  --game-text-stat: 48px;
+  --game-text-damage: 36px;
+  --game-text-hud: 22px;
+  --game-text-label: 14px;
+  --game-text-micro: 11px;
+
+  /* ── 游戏化动效（与 GSAP 时间轴对齐，单位 ms 供 JS 读取） ── */
+  --game-dur-ring-draw: 900ms;
+  --game-dur-node-pop: 280ms;
+  --game-dur-count-up: 1200ms;
+  --game-dur-damage-pop: 650ms;
+  --game-dur-scan-sweep: 1400ms;
+  --game-dur-speedline: 420ms;
+  --game-dur-glitch: 180ms;
+  --game-stagger-step: 150ms;
+  --game-ease-snap: cubic-bezier(0.22, 1, 0.36, 1);
+  --game-ease-impact: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── 布局常量（Stat Ring / 擂台 PK，1080p 坐标系） ── */
+  --game-canvas-w: 1920;
+  --game-canvas-h: 1080;
+  --game-stat-ring-outer: 320px;
+  --game-stat-ring-stroke: 18px;
+  --game-stat-node-size: 56px;
+  --game-pk-bar-height: 28px;
+  --game-pk-avatar: 120px;
+
+  /* ── 拍摄引导 HUD（批次2） ── */
+  --game-guide-header-h: 72px;
+  --game-guide-inset-w: 240px;
+  --game-guide-inset-h: 135px;
+  --game-guide-checklist-w: 280px;
+  --game-guide-teleprompter-h: 56px;
+  --game-guide-progress-bottom: 140px;
+}
+
+/* ── 游戏化排版工具类（预览舞台 / 组件开发用） ── */
+.game-font-display {
+  font-family: var(--game-font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.game-font-hud {
+  font-family: var(--game-font-hud);
+  letter-spacing: 0.04em;
+}
+
+.game-font-mono {
+  font-family: var(--game-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-glow-cyan {
+  text-shadow: 0 0 12px var(--game-hud-cyan-glow);
+}
+
+.game-glow-gold {
+  text-shadow: 0 0 14px var(--game-hud-gold-glow);
+}
