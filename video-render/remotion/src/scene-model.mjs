@@ -10,6 +10,17 @@
 //
 // 确定性：不使用 Date.now()/Math.random()，相同输入产出相同结果。
 
+import {
+  normalizeDataviz,
+  radarPoints,
+  pointsToString,
+  ringDash,
+  countUpText,
+} from "../../../shared/dataviz/geometry.mjs";
+
+// 复用前端同一份数据可视化几何，供渲染端组件 import（单一来源，避免双份实现漂移）。
+export { normalizeDataviz, radarPoints, pointsToString, ringDash, countUpText };
+
 export const FPS = 30;
 
 // 多端裁剪：同一 Timeline 渲不同画幅，与 build.mjs 的 FORMATS 对齐。
@@ -273,6 +284,8 @@ export function normalizeScenes(timeline) {
       compare: normalizeCompare(visual.compare || scene?.compare),
       // 数卡/单指标镜的进度环数据（visual.metric）；无则不渲染数据卡。
       metric: normalizeMetric(visual.metric || scene?.metric),
+      // 数据可视化参数卡（visual.dataviz：bar/radar/ring），与前端 DataVizCard 共用同一几何。
+      dataviz: normalizeDataviz(visual.dataviz || scene?.dataviz),
       // 属性维度（Stat Ring 四角节点 / P2 雷达 HUD）。
       radar: normalizeRadar(visual.radar),
       // 镜头转场（P0：speed-line / scan-wipe）。

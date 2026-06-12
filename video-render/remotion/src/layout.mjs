@@ -13,6 +13,19 @@ const BASE = {
   compare: { top: 340, left: 56, right: 56 },
   // 数卡/单指标镜：进度环居中，环径/数字/文字字号随画幅覆盖。
   metric: { top: 540, ring: 360, valueSize: 132, unitSize: 48, labelSize: 38, captionSize: 38 },
+  // 数据可视化参数卡（bar/radar/ring）：卡片定位 + 各元素字号（与 metric 共享 9:16 基准画面区）。
+  dataviz: {
+    top: 560,
+    left: 70,
+    right: 70,
+    titleSize: 38,
+    labelSize: 32,
+    valueSize: 40,
+    unitSize: 24,
+    ringSize: 200,
+    radarSize: 420,
+    radarPad: 70,
+  },
 };
 
 const OVERRIDES = {
@@ -25,6 +38,7 @@ const OVERRIDES = {
     subtitle: { bottom: 84, left: 200, right: 200 },
     cite: { bottom: 56 },
     metric: { top: 300, ring: 300, valueSize: 116, unitSize: 44 },
+    dataviz: { top: 300, left: 360, right: 360, ringSize: 200, radarSize: 380, radarPad: 64 },
   },
   "1:1": {
     badge: { top: 52 },
@@ -33,6 +47,7 @@ const OVERRIDES = {
     compare: { top: 250, left: 70, right: 70 },
     subtitle: { bottom: 90 },
     metric: { top: 360, ring: 320, valueSize: 120 },
+    dataviz: { top: 380, left: 80, right: 80, ringSize: 200, radarSize: 400, radarPad: 66 },
   },
 };
 

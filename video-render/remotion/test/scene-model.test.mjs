@@ -12,6 +12,7 @@ import {
   metricRingFraction,
   normalizeTransition,
   normalizeRadar,
+  normalizeDataviz,
   buildComposition,
   resolveFormat,
   FPS,
@@ -233,6 +234,37 @@ test("metricRingFraction 环占比随入场 p 增长，到位封顶目标占比"
   const m2 = normalizeMetric({ value: 45 });
   assert.equal(metricRingFraction(m2, 1), 1);
   assert.equal(metricRingFraction(null, 1), 0);
+});
+
+test("normalizeDataviz 从 scene-model 再导出，且 frac 归一化正确", () => {
+  // bar：denom 取全体峰值（无 item.max / viz.max 时）
+  const bar = normalizeDataviz({
+    kind: "bar",
+    title: "实测续航",
+    unit: "小时",
+    items: [{ label: "本品", value: 12 }, { label: "对手", value: 6 }],
+  });
+  assert.equal(bar.kind, "bar");
+  assert.equal(bar.items[0].frac, 1); // 12/12
+  assert.equal(bar.items[1].frac, 0.5); // 6/12
+  // radar 至少 3 项，否则 null
+  assert.equal(normalizeDataviz({ kind: "radar", items: [{ label: "a", value: 1 }, { label: "b", value: 2 }] }), null);
+  // 非法 kind → null
+  assert.equal(normalizeDataviz({ kind: "pie", items: [{ label: "a", value: 1 }, { label: "b", value: 2 }] }), null);
+});
+
+test("normalizeScenes 透传 dataviz（visual.dataviz → null 当无效）", () => {
+  const s = normalizeScenes({
+    timeline: [
+      { duration: 5, visual: { headline: "续航", dataviz: { kind: "ring", unit: "h", items: [{ label: "本品", value: 12, max: 16 }, { label: "对手", value: 8, max: 16 }] } } },
+      { duration: 5, visual: { headline: "x" } }, // 无 dataviz
+      { duration: 5, visual: { dataviz: { kind: "bar", items: [{ label: "仅一项", value: 1 }] } } }, // bar 不足 2 项 → null
+    ],
+  });
+  assert.equal(s[0].dataviz.kind, "ring");
+  assert.equal(s[0].dataviz.items[0].frac, 0.75); // 12/16
+  assert.equal(s[1].dataviz, null);
+  assert.equal(s[2].dataviz, null);
 });
 
 test("normalizeScenes 透传数卡 metric（visual.metric → null 当无效）", () => {

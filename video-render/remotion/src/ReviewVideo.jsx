@@ -21,6 +21,10 @@ import {
   karaokeFraction,
   formatCountUp,
   metricRingFraction,
+  radarPoints,
+  pointsToString,
+  ringDash,
+  countUpText,
 } from "./scene-model.mjs";
 import { layoutFor } from "./layout.mjs";
 import { enter, pulse } from "./anim.mjs";
@@ -251,6 +255,151 @@ function CompareMatrix({ scene, formatKey, localTime }) {
         );
       })}
     </div>
+  );
+}
+
+// 错峰：第 i 项延迟 i*step 后在剩余窗口内走完（与前端 use-entrance.stagger 同语义）。
+function staggerLocal(p, i, step = 0.15) {
+  const delay = i * step;
+  return Math.max(0, Math.min(1, (p - delay) / (1 - delay || 1)));
+}
+
+// 数据可视化参数卡（visual.dataviz：bar/radar/ring）· 渲染端版本。
+// 与前端 src/features/preview/DataVizCard.jsx 同语义（共用 shared/dataviz/geometry 几何 +
+// 错峰入场），但按 1080p 视频尺度放大字号/线宽。better=low 用青绿强调，否则金色。
+function DataVizCard({ viz, localTime, lay }) {
+  const cardP = enter(localTime, 0.3, 0.5, "power3.out");
+  const p = enter(localTime, 0.45, 1.0, "power2.out");
+  const accent = viz.better === "low" ? "#7ee0c0" : "#ffd166";
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: lay.top,
+        left: lay.left,
+        right: lay.right,
+        padding: "28px 32px",
+        borderRadius: 20,
+        background: "rgba(16,19,26,0.92)",
+        border: "1px solid rgba(255,255,255,0.14)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+        opacity: cardP,
+        transform: `translateY(${30 * (1 - cardP)}px)`,
+      }}
+    >
+      {viz.title ? (
+        <div style={{ color: accent, fontSize: lay.titleSize, fontWeight: 900, letterSpacing: 1.2 }}>
+          {viz.title}
+        </div>
+      ) : null}
+      {viz.kind === "bar" ? <DataVizBars viz={viz} p={p} accent={accent} lay={lay} /> : null}
+      {viz.kind === "ring" ? <DataVizRings viz={viz} p={p} accent={accent} lay={lay} /> : null}
+      {viz.kind === "radar" ? <DataVizRadar viz={viz} p={p} accent={accent} lay={lay} /> : null}
+    </div>
+  );
+}
+
+function DataVizBars({ viz, p, accent, lay }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {viz.items.map((item, i) => {
+        const local = staggerLocal(p, i);
+        return (
+          <div
+            key={item.label}
+            style={{ display: "grid", gridTemplateColumns: "minmax(140px,auto) 1fr minmax(120px,auto)", alignItems: "center", gap: 18 }}
+          >
+            <span style={{ color: "#c6cfe6", fontSize: lay.labelSize, fontWeight: 700, whiteSpace: "nowrap" }}>
+              {item.label}
+            </span>
+            <span style={{ height: 22, borderRadius: 11, background: "rgba(255,255,255,0.10)", overflow: "hidden" }}>
+              <span
+                style={{
+                  display: "block",
+                  height: "100%",
+                  width: `${item.frac * local * 100}%`,
+                  borderRadius: 11,
+                  background: `linear-gradient(90deg, ${accent}66, ${accent})`,
+                }}
+              />
+            </span>
+            <span style={{ color: "#fff", fontSize: lay.valueSize, fontWeight: 800, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {countUpText(item.value, local)}
+              {viz.unit ? <i style={{ fontStyle: "normal", fontSize: lay.unitSize, fontWeight: 700, color: accent, marginLeft: 4 }}>{viz.unit}</i> : null}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DataVizRings({ viz, p, accent, lay }) {
+  const items = viz.items.slice(0, 3);
+  const size = lay.ringSize;
+  const stroke = Math.round(size * 0.12);
+  const r = (size - stroke) / 2;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-around", gap: 18 }}>
+      {items.map((item, i) => {
+        const local = staggerLocal(p, i);
+        const { circumference, dash } = ringDash(item.frac * local, r);
+        return (
+          <div key={item.label} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+              <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={stroke} strokeLinecap="round" />
+              <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={r}
+                fill="none"
+                stroke={accent}
+                strokeWidth={stroke}
+                strokeLinecap="round"
+                strokeDasharray={`${dash} ${circumference}`}
+                transform={`rotate(-90 ${size / 2} ${size / 2})`}
+              />
+            </svg>
+            <strong style={{ position: "absolute", top: size * 0.34, fontSize: lay.valueSize, fontWeight: 900, color: "#fff", fontVariantNumeric: "tabular-nums" }}>
+              {countUpText(item.value, local)}
+              {viz.unit ? <i style={{ fontStyle: "normal", fontSize: lay.unitSize, fontWeight: 700, color: accent, marginLeft: 2 }}>{viz.unit}</i> : null}
+            </strong>
+            <span style={{ color: "#c6cfe6", fontSize: lay.labelSize, fontWeight: 700 }}>{item.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DataVizRadar({ viz, p, accent, lay }) {
+  const size = lay.radarSize;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - lay.radarPad;
+  const n = viz.items.length;
+  const grid = [0.33, 0.66, 1].map((k) => pointsToString(radarPoints(n, cx, cy, r * k)));
+  const axes = radarPoints(n, cx, cy, r);
+  const value = pointsToString(radarPoints(n, cx, cy, r, viz.items.map((item) => item.frac * p)));
+  const labels = radarPoints(n, cx, cy, r + lay.radarPad * 0.6);
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block", margin: "0 auto" }}>
+      {grid.map((points) => (
+        <polygon key={points} points={points} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1.5} />
+      ))}
+      {axes.map((a, i) => (
+        <line key={i} x1={cx} y1={cy} x2={a.x} y2={a.y} stroke="rgba(255,255,255,0.10)" strokeWidth={1.5} />
+      ))}
+      <polygon points={value} fill={`${accent}52`} stroke={accent} strokeWidth={3} strokeLinejoin="round" />
+      {labels.map((pt, i) => (
+        <text key={viz.items[i].label} x={pt.x} y={pt.y} fill="#c6cfe6" fontSize={lay.labelSize} fontWeight={700} textAnchor="middle" dominantBaseline="middle">
+          {viz.items[i].label}
+        </text>
+      ))}
+    </svg>
   );
 }
 
@@ -532,6 +681,7 @@ function Scene({ scene, formatKey, assetMap }) {
   const citeLay = layoutFor(formatKey, "cite");
   const stockLay = layoutFor(formatKey, "stock");
   const metricLay = layoutFor(formatKey, "metric");
+  const datavizLay = layoutFor(formatKey, "dataviz");
 
   return (
     <AbsoluteFill>
@@ -611,7 +761,7 @@ function Scene({ scene, formatKey, assetMap }) {
           </div>
         ) : null}
 
-        {!scene.compare && !scene.metric && scene.detail ? (
+        {!scene.compare && !scene.metric && !scene.dataviz && scene.detail ? (
           <div
             style={{
               position: "absolute",
@@ -638,6 +788,10 @@ function Scene({ scene, formatKey, assetMap }) {
 
         {!scene.compare && scene.metric ? (
           <MetricCard metric={scene.metric} radar={scene.radar} localTime={t} lay={metricLay} />
+        ) : null}
+
+        {!scene.compare && !scene.metric && scene.dataviz ? (
+          <DataVizCard viz={scene.dataviz} localTime={t} lay={datavizLay} />
         ) : null}
 
         {scene.subtitle ? (
