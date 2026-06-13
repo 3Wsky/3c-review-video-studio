@@ -26,6 +26,8 @@ const BASE = {
     radarSize: 420,
     radarPad: 70,
   },
+  // 独立雷达 HUD 镜（visual.radar，无 metric）：与前端 RadarHUDCard 占位对齐。
+  radarHud: { top: 1180, left: 70, right: 70, size: 420, pad: 70, titleSize: 28 },
   arena: { top: 180, left: 56, right: 56, titleSize: 36, hpHeight: 28, vsSize: 64 },
   shootGuide: { headerH: 72, checklistW: 280 },
 };
@@ -41,6 +43,7 @@ const OVERRIDES = {
     cite: { bottom: 56 },
     metric: { top: 300, ring: 300, valueSize: 116, unitSize: 44 },
     dataviz: { top: 300, left: 360, right: 360, ringSize: 200, radarSize: 380, radarPad: 64 },
+    radarHud: { top: 620, left: 360, right: 360, size: 380, pad: 64 },
     arena: { top: 140, left: 200, right: 200 },
   },
   "1:1": {
@@ -51,6 +54,7 @@ const OVERRIDES = {
     subtitle: { bottom: 90 },
     metric: { top: 360, ring: 320, valueSize: 120 },
     dataviz: { top: 380, left: 80, right: 80, ringSize: 200, radarSize: 400, radarPad: 66 },
+    radarHud: { top: 680, left: 80, right: 80, size: 400, pad: 66 },
     arena: { top: 160, left: 48, right: 48 },
   },
 };

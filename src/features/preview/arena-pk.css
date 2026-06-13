@@ -1,0 +1,156 @@
+/* 擂台 PK 预览卡 · 游戏化 token 对齐 batch1 §3.3 */
+
+.apk-root {
+  font-family: var(--game-font-hud, "Rajdhani", system-ui, sans-serif);
+}
+
+.apk-title {
+  text-align: center;
+  font-family: var(--game-font-display, "Orbitron", system-ui, sans-serif);
+  font-weight: 700;
+  color: var(--game-hud-gold, #ffd166);
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 18px var(--game-hud-gold-glow, rgba(255, 209, 102, 0.45));
+}
+
+.apk-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 16px;
+  border-radius: 16px;
+  border: 2px solid;
+  position: relative;
+  overflow: hidden;
+}
+
+.apk-side::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, transparent 55%);
+  pointer-events: none;
+}
+
+.apk-side--left {
+  border-color: color-mix(in srgb, var(--game-pk-left, #00e5ff) 55%, transparent);
+  background: var(--game-pk-left-bg, rgba(0, 229, 255, 0.12));
+  box-shadow: inset 0 0 32px rgba(0, 229, 255, 0.08);
+}
+
+.apk-side--right {
+  border-color: color-mix(in srgb, var(--game-pk-right, #ff2d95) 55%, transparent);
+  background: var(--game-pk-right-bg, rgba(255, 45, 149, 0.12));
+  box-shadow: inset 0 0 32px rgba(255, 45, 149, 0.08);
+}
+
+.apk-name--left {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--game-pk-left, #00e5ff);
+  text-shadow: 0 0 12px var(--game-hud-cyan-glow, rgba(0, 229, 255, 0.55));
+}
+
+.apk-name--right {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--game-pk-right, #ff2d95);
+  text-shadow: 0 0 12px var(--game-hud-magenta-glow, rgba(255, 45, 149, 0.5));
+}
+
+.apk-hp-track {
+  width: 85%;
+  height: var(--game-pk-bar-height, 28px);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+
+.apk-hp-fill--left {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--game-pk-left, #00e5ff), var(--game-hud-lime, #7ee0c0));
+  box-shadow: 0 0 12px var(--game-hud-cyan-glow, rgba(0, 229, 255, 0.55));
+}
+
+.apk-hp-fill--right {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--game-pk-right, #ff2d95), #ff6eb4);
+  box-shadow: 0 0 12px var(--game-hud-magenta-glow, rgba(255, 45, 149, 0.5));
+}
+
+.apk-hp-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--game-stat-value, #fff);
+  font-variant-numeric: tabular-nums;
+}
+
+.apk-vs {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--game-font-display, "Orbitron", system-ui, sans-serif);
+  font-size: 28px;
+  font-weight: 900;
+  color: #10131a;
+  background: linear-gradient(135deg, var(--game-pk-vs, #ffd166), #ffe680);
+  box-shadow: 0 0 24px var(--game-hud-gold-glow, rgba(255, 209, 102, 0.6));
+  z-index: 2;
+  animation: apk-vs-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes apk-vs-breathe {
+  0%, 100% { box-shadow: 0 0 20px var(--game-hud-gold-glow, rgba(255, 209, 102, 0.5)); }
+  50% { box-shadow: 0 0 32px var(--game-hud-gold-glow, rgba(255, 209, 102, 0.75)); }
+}
+
+.apk-round {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 26px;
+  font-weight: 700;
+  background: var(--game-panel-bg, rgba(6, 10, 18, 0.75));
+}
+
+.apk-round--normal {
+  color: var(--game-guide-text, #e8f4ff);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.apk-round--crit {
+  color: var(--game-damage-crit, #ffd166);
+  border: 1px solid rgba(255, 209, 102, 0.6);
+  font-family: var(--game-font-display, "Orbitron", system-ui, sans-serif);
+  text-shadow: 0 0 10px var(--game-hud-gold-glow, rgba(255, 209, 102, 0.45));
+}
+
+.apk-verdict {
+  text-align: center;
+  font-family: var(--game-font-display, "Orbitron", system-ui, sans-serif);
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.apk-verdict--left {
+  color: var(--game-pk-left, #00e5ff);
+}
+
+.apk-verdict--right {
+  color: var(--game-pk-right, #ff2d95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apk-vs {
+    animation: none;
+  }
+}

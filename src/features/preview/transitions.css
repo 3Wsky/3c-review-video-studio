@@ -80,3 +80,170 @@
     opacity: 0;
   }
 }
+
+/* ---------- glitch-cut：RGB 通道分离 + 横向位移（B3 实拍特写，180ms） ---------- */
+
+.vt-glitch-cut {
+  animation: vt-glitch-fade 0.22s ease-out forwards;
+}
+
+.vt-glitch-cut::before,
+.vt-glitch-cut::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.vt-glitch-cut::before {
+  box-shadow: inset 0 0 0 9999px rgba(8, 8, 15, 0.55);
+  animation: vt-glitch-r 180ms steps(3, end) forwards;
+  border-left: 3px solid var(--game-glitch-color-a, #ff2d95);
+  border-right: 3px solid var(--game-glitch-color-b, #00e5ff);
+}
+
+.vt-glitch-cut::after {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 2px,
+      rgba(255, 255, 255, 0.04) 2px 3px
+    );
+  animation: vt-glitch-scan 180ms linear forwards;
+}
+
+@keyframes vt-glitch-r {
+  0% { transform: translateX(calc(var(--game-glitch-shift, 6px) * -1)); filter: hue-rotate(0deg); }
+  33% { transform: translateX(var(--game-glitch-shift, 6px)); filter: hue-rotate(8deg); }
+  66% { transform: translateX(calc(var(--game-glitch-shift, 6px) * -0.5)); filter: hue-rotate(-6deg); }
+  100% { transform: translateX(0); opacity: 0; }
+}
+
+@keyframes vt-glitch-scan {
+  from { opacity: 0.9; transform: translateY(-8%); }
+  to { opacity: 0; transform: translateY(8%); }
+}
+
+@keyframes vt-glitch-fade {
+  from { background: rgba(255, 255, 255, 0.08); }
+  to { background: transparent; }
+}
+
+/* ---------- pixel-dissolve：像素格溶解离场 ---------- */
+
+.vt-pixel-dissolve {
+  background: rgba(8, 8, 15, 0.35);
+  animation: vt-pixel-out 0.72s steps(8, end) forwards;
+  mask-image:
+    repeating-linear-gradient(
+      0deg,
+      #000 0 var(--game-pixel-dissolve-size, 8px),
+      transparent var(--game-pixel-dissolve-size, 8px) calc(var(--game-pixel-dissolve-size, 8px) * 2)
+    ),
+    repeating-linear-gradient(
+      90deg,
+      #000 0 var(--game-pixel-dissolve-size, 8px),
+      transparent var(--game-pixel-dissolve-size, 8px) calc(var(--game-pixel-dissolve-size, 8px) * 2)
+    );
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+}
+
+@keyframes vt-pixel-out {
+  0% { opacity: 1; filter: contrast(1.1); }
+  100% { opacity: 0; filter: contrast(1.4) brightness(1.2); transform: scale(1.02); }
+}
+
+/* ---------- screen-crack：中心放射状碎裂线 ---------- */
+
+.vt-screen-crack {
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.12) 0%, transparent 42%);
+  animation: vt-crack-flash 0.48s ease-out forwards;
+}
+
+.vt-screen-crack i {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: 2px;
+  height: 55%;
+  margin-left: -1px;
+  transform-origin: top center;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.35) 55%,
+    transparent 100%
+  );
+  animation: vt-crack-grow 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  opacity: 0;
+}
+
+.vt-screen-crack i:nth-child(1) { transform: rotate(-72deg); animation-delay: 0s; }
+.vt-screen-crack i:nth-child(2) { transform: rotate(-36deg); animation-delay: 0.04s; height: 48%; }
+.vt-screen-crack i:nth-child(3) { transform: rotate(0deg); animation-delay: 0.02s; height: 62%; }
+.vt-screen-crack i:nth-child(4) { transform: rotate(36deg); animation-delay: 0.06s; height: 50%; }
+.vt-screen-crack i:nth-child(5) { transform: rotate(72deg); animation-delay: 0.03s; }
+.vt-screen-crack i:nth-child(6) { transform: rotate(108deg); animation-delay: 0.05s; height: 46%; }
+.vt-screen-crack i:nth-child(7) { transform: rotate(144deg); animation-delay: 0.01s; height: 58%; }
+
+@keyframes vt-crack-grow {
+  from { transform: scaleY(0) rotate(var(--crack-rot, 0deg)); opacity: 0; }
+  30% { opacity: 1; }
+  to { transform: scaleY(1) rotate(var(--crack-rot, 0deg)); opacity: 0; }
+}
+
+@keyframes vt-crack-flash {
+  0% { background-color: rgba(255, 255, 255, 0.18); }
+  100% { background-color: transparent; }
+}
+
+/* ---------- iris-close：光圈收束（B6 CTA 出场） ---------- */
+
+.vt-iris-close {
+  background: radial-gradient(circle at center, transparent 58%, rgba(0, 0, 0, 0.92) 59%);
+  animation: vt-iris 0.85s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.vt-iris-close::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  margin: auto;
+  width: 140%;
+  height: 140%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.88);
+  animation: vt-iris-hole 0.85s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes vt-iris-hole {
+  from {
+    transform: scale(2.2);
+    opacity: 0.95;
+  }
+  to {
+    transform: scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes vt-iris {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-glitch-cut::before,
+  .vt-glitch-cut::after,
+  .vt-pixel-dissolve,
+  .vt-screen-crack,
+  .vt-screen-crack i,
+  .vt-iris-close,
+  .vt-iris-close::after {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}

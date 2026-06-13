@@ -108,6 +108,57 @@ export function pointsToString(points) {
   return points.map((p) => `${p.x},${p.y}`).join(" ");
 }
 
+// ---------- 雷达 HUD 五维扫描几何（P2）----------
+//
+// 360° 扫描线掠过 → 顶点被「扫到」即锁定（lock-on），值多边形随锁定的顶点逐个展开。
+// 纯函数：给定入场进度 p ∈ [0,1] 与顶点数，算出扫描角与每个顶点的锁定进度。
+// 渲染端（Remotion 帧插值）与前端预览（rAF）共用，保证扫描节奏一致。
+//
+// 约定：顶点 i 的「应被扫到」角度 = i / count（0=正上方，顺时针）。扫描进度 sweep ∈ [0,1]
+// 表示扫描线已转过的整圈比例（>1 表示多扫了一些，便于最后一个顶点也锁定）。
+// 顶点锁定进度 = clamp01((sweep - i/count) / lockSpan)，lockSpan 控制单点点亮快慢。
+
+export function radarSweepAngle(p) {
+  // 入场 0→1 内扫 ~1.15 圈（多一点确保末顶点锁定），缓出。
+  return clamp01(p) * 1.15;
+}
+
+// 每个顶点的锁定进度数组（0=未锁定，1=完全点亮）。
+export function radarLockFractions(count, p, lockSpan = 0.14) {
+  const sweep = radarSweepAngle(p);
+  const span = lockSpan > 0 ? lockSpan : 0.14;
+  const out = [];
+  for (let i = 0; i < count; i += 1) {
+    out.push(clamp01((sweep - i / count) / span));
+  }
+  return out;
+}
+
+// 值多边形顶点：半径 = 数据占比 frac × 该顶点锁定进度（未锁定的顶点缩回圆心，逐个弹出）。
+export function radarValuePoints(count, cx, cy, r, fracs, locks) {
+  const scaled = [];
+  for (let i = 0; i < count; i += 1) {
+    const f = fracs && fracs[i] != null ? fracs[i] : 0;
+    const lk = locks && locks[i] != null ? locks[i] : 1;
+    scaled.push(f * lk);
+  }
+  return radarPoints(count, cx, cy, r, scaled);
+}
+
+// 扫描线端点（从圆心指向当前扫描角，超过 1 圈后停在最后一个顶点方向收尾）。
+export function radarSweepEndpoint(cx, cy, r, p) {
+  const sweep = radarSweepAngle(p);
+  // 扫描角折算成弧度（-90° 起，顺时针），sweep>1 时停在末端不再回绕。
+  const turns = Math.min(sweep, 1);
+  const angle = -Math.PI / 2 + turns * 2 * Math.PI;
+  return {
+    x: round2(cx + Math.cos(angle) * r),
+    y: round2(cy + Math.sin(angle) * r),
+    angleDeg: round2(turns * 360),
+    done: sweep >= 1,
+  };
+}
+
 // ---------- 进度环几何 ----------
 
 // frac ∈ [0,1] → SVG stroke-dasharray 参数（配 rotate(-90) 从顶部起画）

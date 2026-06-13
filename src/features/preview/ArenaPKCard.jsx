@@ -1,6 +1,7 @@
 import { useMemo } from "preact/hooks";
 import { useLinearTime, enter, useStageScale, STAGE_BASE_W, STAGE_BASE_H } from "./preview-utils.js";
 import { layoutFor } from "../../../video-render/remotion/src/layout.mjs";
+import "./arena-pk.css";
 
 // 擂台 PK 预览卡：复用 Remotion <ArenaPK> 的 1080×1920 像素布局，整体 scale 进预览舞台，
 // 保证预览与出片视觉一致（动画用 useLinearTime 线性时间驱动，几何来自 normalizeBattle）。
@@ -24,20 +25,10 @@ export default function ArenaPKCard({ battle, sceneKey, durationSec, formatKey =
   const hpFillA = enter(localTime, 0.3, 0.6, "power2.out") * (hpA / 100);
   const hpFillB = enter(localTime, 0.3, 0.6, "power2.out") * (hpB / 100);
 
-  const sideBase = {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 16,
-    padding: "20px 16px",
-    borderRadius: 16,
-    border: "2px solid",
-  };
-
   return (
     <div ref={ref} style={{ position: "absolute", inset: 0, zIndex: 8, pointerEvents: "none", overflow: "hidden" }}>
       <div
+        class="apk-root"
         style={{
           position: "absolute",
           top: 0,
@@ -46,7 +37,6 @@ export default function ArenaPKCard({ battle, sceneKey, durationSec, formatKey =
           height: STAGE_BASE_H,
           transform: `scale(${scale || 0})`,
           transformOrigin: "top left",
-          fontFamily: "var(--game-font-hud, 'Rajdhani', system-ui, sans-serif)",
         }}
       >
         <div
@@ -60,74 +50,49 @@ export default function ArenaPKCard({ battle, sceneKey, durationSec, formatKey =
             gap: 20,
           }}
         >
-          <div
-            style={{
-              textAlign: "center",
-              fontSize: lay.titleSize || 36,
-              fontWeight: 700,
-              color: "#ffd166",
-              letterSpacing: 2,
-              opacity: slideP,
-            }}
-          >
+          <div class="apk-title" style={{ fontSize: lay.titleSize || 36, opacity: slideP }}>
             擂台 PK · {battle.rounds[0]?.dim || "对决"}
           </div>
 
           <div style={{ display: "flex", gap: 24, alignItems: "stretch", position: "relative" }}>
             <div
+              class="apk-side apk-side--left"
               style={{
-                ...sideBase,
-                borderColor: "rgba(0,229,255,0.55)",
-                background: "rgba(0,229,255,0.1)",
                 transform: `translateX(${-80 * (1 - slideP)}px)`,
                 opacity: slideP,
               }}
             >
-              <div style={{ fontSize: 32, fontWeight: 800, color: "#00e5ff" }}>{battle.products[0]}</div>
-              <div style={{ width: "85%", height: lay.hpHeight || 28, borderRadius: 8, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                <div style={{ width: `${hpFillA * 100}%`, height: "100%", background: "linear-gradient(90deg,#00e5ff,#7ee0c0)", borderRadius: 8 }} />
+              <div class="apk-name--left">{battle.products[0]}</div>
+              <div class="apk-hp-track">
+                <div class="apk-hp-fill--left" style={{ width: `${hpFillA * 100}%` }} />
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: "#fff" }}>{Math.round(hpA)}%</div>
+              <div class="apk-hp-value">{Math.round(hpA)}%</div>
             </div>
 
             <div
+              class="apk-vs"
               style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: `translate(-50%, -50%) scale(${0.3 + 0.7 * vsP})`,
                 width: lay.vsSize || 64,
                 height: lay.vsSize || 64,
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 28,
-                fontWeight: 900,
-                color: "#10131a",
-                background: "linear-gradient(135deg,#ffd166,#ffe680)",
-                boxShadow: "0 0 24px rgba(255,209,102,0.6)",
+                transform: `translate(-50%, -50%) scale(${0.3 + 0.7 * vsP})`,
                 opacity: vsP,
-                zIndex: 2,
               }}
             >
               VS
             </div>
 
             <div
+              class="apk-side apk-side--right"
               style={{
-                ...sideBase,
-                borderColor: "rgba(255,45,149,0.55)",
-                background: "rgba(255,45,149,0.1)",
                 transform: `translateX(${80 * (1 - slideP)}px)`,
                 opacity: slideP,
               }}
             >
-              <div style={{ fontSize: 32, fontWeight: 800, color: "#ff2d95" }}>{battle.products[1]}</div>
-              <div style={{ width: "85%", height: lay.hpHeight || 28, borderRadius: 8, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
-                <div style={{ width: `${hpFillB * 100}%`, height: "100%", background: "linear-gradient(90deg,#ff2d95,#ff6eb4)", borderRadius: 8 }} />
+              <div class="apk-name--right">{battle.products[1]}</div>
+              <div class="apk-hp-track">
+                <div class="apk-hp-fill--right" style={{ width: `${hpFillB * 100}%` }} />
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: "#fff" }}>{Math.round(hpB)}%</div>
+              <div class="apk-hp-value">{Math.round(hpB)}%</div>
             </div>
           </div>
 
@@ -139,14 +104,8 @@ export default function ArenaPKCard({ battle, sceneKey, durationSec, formatKey =
                 return (
                   <div
                     key={r.dim}
+                    class={`apk-round ${isCrit ? "apk-round--crit" : "apk-round--normal"}`}
                     style={{
-                      padding: "8px 18px",
-                      borderRadius: 10,
-                      fontSize: 26,
-                      fontWeight: 700,
-                      color: isCrit ? "#ffd166" : "#e8f4ff",
-                      background: "rgba(6,10,18,0.75)",
-                      border: `1px solid ${isCrit ? "rgba(255,209,102,0.6)" : "rgba(0,229,255,0.3)"}`,
                       opacity: dmgP,
                       transform: `translateY(${-20 * (1 - dmgP)}px)`,
                     }}
@@ -162,13 +121,8 @@ export default function ArenaPKCard({ battle, sceneKey, durationSec, formatKey =
 
           {battle.verdict >= 0 ? (
             <div
-              style={{
-                textAlign: "center",
-                fontSize: 34,
-                fontWeight: 800,
-                color: battle.verdict === 0 ? "#00e5ff" : "#ff2d95",
-                opacity: enter(localTime, roundStart + roundCount * roundDur + 0.3, 0.5, "power2.out"),
-              }}
+              class={`apk-verdict ${battle.verdict === 0 ? "apk-verdict--left" : "apk-verdict--right"}`}
+              style={{ opacity: enter(localTime, roundStart + roundCount * roundDur + 0.3, 0.5, "power2.out") }}
             >
               🏆 {battle.products[battle.verdict]} 胜出
             </div>

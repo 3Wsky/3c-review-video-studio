@@ -365,8 +365,9 @@ src/components/ui/
   index.js          ← 组件 barrel export
 
 docs/
-  design-system.md      ← 本文档
-  game-design-batch1.md ← 游戏化批次1交付
+  design-system.md              ← 本文档
+  game-design-batch1.md         ← 游戏化批次1交付（含 §3.4 雷达 HUD · §3.5 转场库）
+  game-design-batch2-shoot-guide.md ← 游戏化批次2交付（拍摄引导）
 ```
 
 ---

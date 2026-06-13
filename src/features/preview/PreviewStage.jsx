@@ -5,12 +5,20 @@ import DataVizCard from "./DataVizCard.jsx";
 import StatRingCard from "./StatRingCard.jsx";
 import ArenaPKCard from "./ArenaPKCard.jsx";
 import ShootGuideHUDCard from "./ShootGuideHUDCard.jsx";
+import RadarHUDCard from "./RadarHUDCard.jsx";
 import { normalizeBattle } from "../../../shared/dataviz/geometry.mjs";
-import { isArenaMode, normalizeShootGuide } from "../../../video-render/remotion/src/scene-model.mjs";
+import { isArenaMode, normalizeShootGuide, normalizeRadar } from "../../../video-render/remotion/src/scene-model.mjs";
 import "./transitions.css";
 
-// P0 先支持两种转场；其余（glitch-cut 等）后续批次补
-const PREVIEW_TRANSITIONS = new Set(["speed-line", "scan-wipe"]);
+// 转场库：P0 speed-line / scan-wipe + P2 glitch-cut / pixel-dissolve / screen-crack / iris-close
+const PREVIEW_TRANSITIONS = new Set([
+  "speed-line",
+  "scan-wipe",
+  "glitch-cut",
+  "pixel-dissolve",
+  "screen-crack",
+  "iris-close",
+]);
 
 export default function PreviewStage() {
   const timeline = useDirectorStore((s) => s.timeline);
@@ -53,6 +61,12 @@ export default function PreviewStage() {
         : null),
     [visual.shootGuide, visual.type, visual.headline, visual.detail]
   );
+  // 雷达 HUD 五维扫描：visual.radar 独立成镜（无 metric 时）。
+  // 有 metric 时 radar 走 StatRing 四角节点；此处仅接 standalone radar，避免与 StatRing 重复。
+  const radarHud = useMemo(
+    () => (!visual.metric ? normalizeRadar(visual.radar) : null),
+    [visual.radar, visual.metric]
+  );
 
   return (
     <aside class="preview-col">
@@ -91,13 +105,15 @@ export default function PreviewStage() {
             <div class="host-body" />
           </div>
 
-          {/* 渲染优先级与 Remotion ReviewVideo 对齐：擂台 → 拍摄引导 → StatRing → dataviz → 普通结论卡 */}
+          {/* 渲染优先级与 Remotion ReviewVideo 对齐：擂台 → 拍摄引导 → StatRing → 雷达HUD → dataviz → 普通结论卡 */}
           {battle ? (
             <ArenaPKCard battle={battle} sceneKey={sceneKey} durationSec={scene?.duration || 4} formatKey={formatKey} />
           ) : shootGuide ? (
             <ShootGuideHUDCard guide={shootGuide} sceneKey={sceneKey} durationSec={scene?.duration || 4} formatKey={formatKey} />
           ) : visual.metric ? (
             <StatRingCard metric={visual.metric} radar={visual.radar} sceneKey={sceneKey} />
+          ) : radarHud ? (
+            <RadarHUDCard radar={radarHud} sceneKey={sceneKey} />
           ) : visual.dataviz ? (
             <DataVizCard dataviz={visual.dataviz} sceneKey={sceneKey} />
           ) : (
@@ -119,6 +135,20 @@ export default function PreviewStage() {
           ) : null}
           {vtKind === "scan-wipe" ? (
             <div class="vt-layer vt-scan-wipe" key={`${sceneKey}-sw`} aria-hidden="true" />
+          ) : null}
+          {vtKind === "glitch-cut" ? (
+            <div class="vt-layer vt-glitch-cut" key={`${sceneKey}-gc`} aria-hidden="true" />
+          ) : null}
+          {vtKind === "pixel-dissolve" ? (
+            <div class="vt-layer vt-pixel-dissolve" key={`${sceneKey}-pd`} aria-hidden="true" />
+          ) : null}
+          {vtKind === "screen-crack" ? (
+            <div class="vt-layer vt-screen-crack" key={`${sceneKey}-sc`} aria-hidden="true">
+              <i /><i /><i /><i /><i /><i /><i />
+            </div>
+          ) : null}
+          {vtKind === "iris-close" ? (
+            <div class="vt-layer vt-iris-close" key={`${sceneKey}-ic`} aria-hidden="true" />
           ) : null}
         </div>
       </div>

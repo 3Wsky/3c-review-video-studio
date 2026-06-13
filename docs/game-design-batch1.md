@@ -338,6 +338,124 @@ public/game-assets/
 
 ---
 
+### 3.4 雷达 HUD 五维扫描（P2 · Valorant 特工选择风）
+
+**场景时长**：6–8s · **数据源**：`visual.radar = { dims: [{label, value, max?}] }`（≥3 维，最多 6 维）
+
+**与 Stat Ring 关系**：
+
+| 条件 | 渲染组件 | 说明 |
+|------|----------|------|
+| 有 `visual.metric` | `StatRingCard` 四角节点 | radar dims 作属性环外围节点 |
+| 无 metric，有 radar | `RadarHUDCard` 独立成镜 | 本节 spec |
+| 有 `visual.dataviz` kind=radar | `DataVizCard` 静态雷达 | 无扫描动画，批次1 遗留 |
+
+**Timeline JSON**：
+
+```json
+{
+  "visual": {
+    "type": "雷达扫描",
+    "radar": {
+      "dims": [
+        { "label": "性能", "value": 92, "max": 100 },
+        { "label": "续航", "value": 78, "max": 100 },
+        { "label": "影像", "value": 85, "max": 100 },
+        { "label": "散热", "value": 70, "max": 100 },
+        { "label": "性价比", "value": 88, "max": 100 }
+      ]
+    }
+  }
+}
+```
+
+`frac` 由 `normalizeRadar()` 计算：分母 = 各维 `max` 峰值（缺省 max 时取全体 value 峰值）。
+
+#### 布局（预览卡 · 字幕条上方）
+
+```
+┌──────────────────────────────────────────────┐
+│ ┌─┐                              ┌─┐         │  ← HUD L 角标 14px
+│ │                              │ │         │
+│         RADAR SCAN  (Orbitron)               │  ← .rh-title
+│              ┌─────────┐                     │
+│             /   ·  ·   \                    │  ← 3 层网格 33%/66%/100%
+│            │  ╱ sweep ╲  │                   │  ← 扫描扇形 + 扫描线
+│             \  value   /                    │  ← 值多边形（逐顶点弹出）
+│              └─────────┘                     │
+│           性能  续航  影像 …                  │  ← 标签 orbit r+18
+│ └─┘                              └─┘         │
+└──────────────────────────────────────────────┘
+  bottom: 92px · left/right: 18px · z-index: 6
+```
+
+| 元素 | 预览尺寸 | 1080p Remotion 等比 | Token |
+|------|----------|---------------------|-------|
+| 卡片底 | full width − 36px | layout.radar | `--game-panel-bg` |
+| 边框 | 1px | — | `--game-panel-border` |
+| SVG 画布 | 188×188 viewBox | scale × layout | — |
+| 雷达半径 r | 60 (= 94−34) | 按比例放大 | — |
+| 网格层 | 33% / 66% / 100% | 同左 | `--game-radar-grid` |
+| 扫描线 | stroke 2px + dot r=3 | 同左 | `--game-hud-cyan` |
+| 扫描扇形 | fill 12% cyan | 同左 | `--game-hud-cyan` |
+| 值多边形 | fill 26% + stroke 2px | 同左 | `--game-hud-cyan` |
+| 顶点锁定 | r 2.5→4.5 + 脉冲 | 同左 | `--game-radar-vertex` |
+| 标签 | 10px Rajdhani | `--game-text-label` | 锁定后 #fff |
+
+#### 动效时序（共用 `geometry.mjs` · 预览 1800ms · Remotion 按镜长插值）
+
+| 进度 p | 动作 | 参数 | 音效 |
+|--------|------|------|------|
+| 0.0 | 卡片淡入 | opacity 0→1, 200ms | `sfx_ui_open` |
+| 0.0–0.87 | 扫描线旋转 | `radarSweepAngle(p) = p × 1.15` 圈 | — |
+| 每顶点 i | lock-on | `locks[i] = clamp((sweep − i/n) / 0.14)` | 锁定>0.5 → `sfx_scan_sweep` |
+| 同步 | 值多边形弹出 | 半径 = frac × lock | — |
+| 顶点 | 脉冲放大 | scale 0.6→1.35→1, 550ms | `sfx_stat_pop` |
+| 0.87–1.0 | 扫描线淡出 | sweepOpacity 线性降至 0 | — |
+| 1.0 |  hold | 全顶点点亮，值多边形完整 | — |
+
+**几何 API**（`shared/dataviz/geometry.mjs`）：
+
+```js
+radarLockFractions(n, p, lockSpan = 0.14)
+radarValuePoints(n, cx, cy, r, fracs, locks)
+radarSweepEndpoint(cx, cy, r, p)  // → { x, y, angleDeg, done }
+```
+
+#### 渲染优先级（与 Remotion 对齐）
+
+```
+battle > shootGuide > metric(StatRing+radar节点) > radar(独立) > dataviz > info-card
+```
+
+#### 实现文件
+
+| 端 | 路径 |
+|----|------|
+| 预览 | `src/features/preview/RadarHUDCard.jsx` + `radar-hud.css` |
+| 几何 | `shared/dataviz/geometry.mjs` |
+| 归一化 | `video-render/remotion/src/scene-model.mjs` → `normalizeRadar()` |
+| Remotion | `ReviewVideo.jsx` → `<RadarHUD>`（架构师 P2 进行中） |
+
+---
+
+### 3.5 P2 转场库补充（glitch / pixel / crack / iris）
+
+| 转场 | Beat 用途 | 时长 | Token | 预览类名 |
+|------|-----------|------|-------|----------|
+| `glitch-cut` | B3 实拍特写入场 | 180ms | `--game-glitch-shift` | `.vt-glitch-cut` |
+| `pixel-dissolve` | 数据卡离场 | 720ms | `--game-pixel-dissolve-size: 8px` | `.vt-pixel-dissolve` |
+| `screen-crack` | 反转 Beat 冲击 | 480ms | — | `.vt-screen-crack` |
+| `iris-close` | B6 CTA 光圈收束 | 850ms | — | `.vt-iris-close` |
+
+**glitch-cut 参数**：RGB 分离 ±6px + 品红/青硬边 + 扫描线纹理，steps(3) 切帧感。
+
+**iris-close 参数**：径向遮罩 scale 2.2→0，box-shadow 9999px 模拟光圈闭合。
+
+预览 CSS 见 `src/features/preview/transitions.css`；Remotion 帧动画待架构师对齐。
+
+---
+
 ## 4. 落地优先级（批次对照）
 
 | 优先级 | 内容 | 本批次 | 架构师动作 |

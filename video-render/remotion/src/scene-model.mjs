@@ -17,10 +17,23 @@ import {
   pointsToString,
   ringDash,
   countUpText,
+  radarLockFractions,
+  radarValuePoints,
+  radarSweepEndpoint,
 } from "../../../shared/dataviz/geometry.mjs";
 
 // 复用前端同一份数据可视化几何，供渲染端组件 import（单一来源，避免双份实现漂移）。
-export { normalizeDataviz, normalizeBattle, radarPoints, pointsToString, ringDash, countUpText };
+export {
+  normalizeDataviz,
+  normalizeBattle,
+  radarPoints,
+  pointsToString,
+  ringDash,
+  countUpText,
+  radarLockFractions,
+  radarValuePoints,
+  radarSweepEndpoint,
+};
 
 export const FPS = 30;
 

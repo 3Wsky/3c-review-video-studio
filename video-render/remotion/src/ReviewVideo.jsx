@@ -25,6 +25,9 @@ import {
   pointsToString,
   ringDash,
   countUpText,
+  radarLockFractions,
+  radarValuePoints,
+  radarSweepEndpoint,
 } from "./scene-model.mjs";
 import { layoutFor } from "./layout.mjs";
 import { enter, pulse } from "./anim.mjs";
@@ -400,6 +403,126 @@ function DataVizRadar({ viz, p, accent, lay }) {
         </text>
       ))}
     </svg>
+  );
+}
+
+// 雷达 HUD 五维扫描卡（visual.radar 独立成镜，无 metric）· P2。
+// 360° 扫描线 + 顶点 lock-on + 值多边形逐顶点展开；几何与前端 RadarHUDCard 共用 geometry.mjs。
+function RadarHUD({ radar, localTime, lay }) {
+  const dims = radar?.dims || [];
+  if (dims.length < 3) return null;
+
+  const cardP = enter(localTime, 0.1, 0.45, "power3.out");
+  const p = enter(localTime, 0.15, 1.65, "power2.out");
+
+  const size = lay.size || 420;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size / 2 - (lay.pad || 70);
+  const n = dims.length;
+
+  const grid = [0.33, 0.66, 1].map((k) => pointsToString(radarPoints(n, cx, cy, r * k)));
+  const axes = radarPoints(n, cx, cy, r);
+  const labels = radarPoints(n, cx, cy, r + (lay.pad || 70) * 0.26);
+  const locks = radarLockFractions(n, p);
+  const fracs = dims.map((d) => d.frac);
+  const value = pointsToString(radarValuePoints(n, cx, cy, r, fracs, locks));
+  const sweep = radarSweepEndpoint(cx, cy, r, p);
+  const sweepOpacity = sweep.done ? Math.max(0, 1 - (p - 0.87) / 0.13) : 0.9;
+
+  const sweepSector =
+    sweep.done || sweepOpacity <= 0
+      ? null
+      : (() => {
+          const startX = cx;
+          const startY = cy - r;
+          const large = sweep.angleDeg > 180 ? 1 : 0;
+          return `M ${cx} ${cy} L ${startX} ${startY} A ${r} ${r} 0 ${large} 1 ${sweep.x} ${sweep.y} Z`;
+        })();
+
+  const hudCyan = "#00e5ff";
+  const vertexLit = "#7ee0c0";
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: lay.top,
+        left: lay.left,
+        right: lay.right,
+        padding: "18px 22px 24px",
+        borderRadius: 4,
+        background: "rgba(10, 16, 22, 0.92)",
+        border: "1px solid rgba(0, 229, 255, 0.28)",
+        boxShadow: "inset 0 0 24px rgba(0, 229, 255, 0.04)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 10,
+        opacity: cardP,
+        transform: `translateY(${28 * (1 - cardP)}px)`,
+      }}
+    >
+      <div
+        style={{
+          fontSize: lay.titleSize || 28,
+          fontWeight: 700,
+          letterSpacing: 2,
+          color: hudCyan,
+          textTransform: "uppercase",
+        }}
+      >
+        Radar Scan
+      </div>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="雷达扫描">
+        {grid.map((points) => (
+          <polygon key={points} points={points} fill="none" stroke="rgba(0,229,255,0.15)" strokeWidth={1} />
+        ))}
+        {axes.map((a, i) => (
+          <line key={`ax-${i}`} x1={cx} y1={cy} x2={a.x} y2={a.y} stroke="rgba(0,229,255,0.12)" strokeWidth={1} />
+        ))}
+        {sweepSector ? <path d={sweepSector} fill={hudCyan} opacity={0.12} /> : null}
+        {!sweep.done || sweepOpacity > 0 ? (
+          <g opacity={sweepOpacity}>
+            <line x1={cx} y1={cy} x2={sweep.x} y2={sweep.y} stroke={hudCyan} strokeWidth={2} strokeLinecap="round" />
+            <circle cx={sweep.x} cy={sweep.y} r={4} fill={hudCyan} />
+          </g>
+        ) : null}
+        <polygon
+          points={value}
+          fill="rgba(0,229,255,0.26)"
+          stroke={hudCyan}
+          strokeWidth={2}
+          strokeLinejoin="round"
+        />
+        {axes.map((a, i) => {
+          const lit = locks[i] > 0.5;
+          return (
+            <circle
+              key={`vx-${i}`}
+              cx={a.x}
+              cy={a.y}
+              r={lit ? 5 : 3}
+              fill={lit ? vertexLit : "rgba(255,255,255,0.3)"}
+            />
+          );
+        })}
+        {labels.map((pt, i) => (
+          <text
+            key={dims[i].label}
+            x={pt.x}
+            y={pt.y}
+            fill={locks[i] > 0.5 ? "#fff" : "rgba(198,207,230,0.5)"}
+            fontSize={Math.max(22, Math.round(size * 0.052))}
+            fontWeight={700}
+            textAnchor="middle"
+            dominantBaseline="middle"
+          >
+            {dims[i].label}
+          </text>
+        ))}
+      </svg>
+    </div>
   );
 }
 
@@ -884,7 +1007,7 @@ function ShootGuideHUD({ guide, localTime, formatKey }) {
   );
 }
 
-// 镜头转场层（scene.transition.in）· P0：speed-line / scan-wipe。
+// 镜头转场层（scene.transition.in）· P0：speed-line / scan-wipe；P2：glitch-cut / pixel-dissolve / screen-crack / iris-close。
 // 与网页预览 transitions.css 的动效语义一致，这里用帧插值实现（确定性逐帧渲染）。
 const SPEED_LINES = [
   { top: 0.12, h: 3, delay: 0 },
@@ -952,6 +1075,102 @@ function TransitionLayer({ kind, localTime }) {
     );
   }
 
+  if (kind === "glitch-cut") {
+    const p = enter(localTime, 0, 0.22, "power2.out");
+    if (p >= 1) return null;
+    const shift = 6 * (1 - p);
+    const phase = Math.floor(p * 9) % 3;
+    const dx = phase === 0 ? -shift : phase === 1 ? shift : -shift * 0.5;
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
+        <AbsoluteFill style={{ background: "rgba(255,255,255,0.08)", opacity: 1 - p }} />
+        <AbsoluteFill
+          style={{
+            boxShadow: "inset 0 0 0 9999px rgba(8,8,15,0.55)",
+            borderLeft: "3px solid #ff2d95",
+            borderRight: "3px solid #00e5ff",
+            transform: `translateX(${dx}px)`,
+            opacity: 1 - p * 0.85,
+          }}
+        />
+        <AbsoluteFill
+          style={{
+            background:
+              "repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,0.04) 2px 3px)",
+            transform: `translateY(${(-8 + 16 * p) * height * 0.01}px)`,
+            opacity: 0.9 * (1 - p),
+          }}
+        />
+      </AbsoluteFill>
+    );
+  }
+
+  if (kind === "pixel-dissolve") {
+    const p = enter(localTime, 0, 0.72, "steps(8)");
+    if (p >= 1) return null;
+    const fade = 1 - p;
+    return (
+      <AbsoluteFill
+        style={{
+          pointerEvents: "none",
+          background: "rgba(8,8,15,0.35)",
+          opacity: fade,
+          transform: `scale(${1 + 0.02 * p})`,
+          filter: `contrast(${1.1 + 0.3 * p}) brightness(${1 + 0.2 * p})`,
+        }}
+      />
+    );
+  }
+
+  if (kind === "screen-crack") {
+    const p = enter(localTime, 0, 0.48, "power2.out");
+    if (p >= 1) return null;
+    const crackLines = [-72, -36, 0, 36, 72, 108, 144];
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
+        <AbsoluteFill
+          style={{
+            background: "radial-gradient(circle at 50% 45%, rgba(255,255,255,0.12) 0%, transparent 42%)",
+            opacity: 1 - p * 0.6,
+          }}
+        />
+        {crackLines.map((deg, i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "45%",
+              width: 2,
+              height: `${(40 + (i % 3) * 8) * (0.3 + 0.7 * p)}%`,
+              background: "linear-gradient(to bottom, rgba(255,255,255,0.85), transparent)",
+              transformOrigin: "50% 0%",
+              transform: `translateX(-50%) rotate(${deg}deg)`,
+              opacity: 1 - p * 0.5,
+            }}
+          />
+        ))}
+      </AbsoluteFill>
+    );
+  }
+
+  if (kind === "iris-close") {
+    const p = enter(localTime, 0, 0.6, "power3.inOut");
+    if (p >= 1) return null;
+    const radius = Math.max(0, (1 - p) * 120);
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none" }}>
+        <AbsoluteFill
+          style={{
+            background: "#000",
+            WebkitMaskImage: `radial-gradient(circle at 50% 50%, transparent ${radius}%, black ${radius + 2}%)`,
+            maskImage: `radial-gradient(circle at 50% 50%, transparent ${radius}%, black ${radius + 2}%)`,
+          }}
+        />
+      </AbsoluteFill>
+    );
+  }
+
   return null;
 }
 
@@ -985,6 +1204,7 @@ function Scene({ scene, formatKey, assetMap }) {
   const stockLay = layoutFor(formatKey, "stock");
   const metricLay = layoutFor(formatKey, "metric");
   const datavizLay = layoutFor(formatKey, "dataviz");
+  const radarHudLay = layoutFor(formatKey, "radarHud");
   const arenaLay = layoutFor(formatKey, "arena");
 
   return (
@@ -1065,7 +1285,7 @@ function Scene({ scene, formatKey, assetMap }) {
           </div>
         ) : null}
 
-        {!scene.battle && !scene.compare && !scene.metric && !scene.dataviz && scene.detail ? (
+        {!scene.battle && !scene.compare && !scene.metric && !scene.dataviz && !scene.radar && scene.detail ? (
           <div
             style={{
               position: "absolute",
@@ -1098,7 +1318,11 @@ function Scene({ scene, formatKey, assetMap }) {
           <MetricCard metric={scene.metric} radar={scene.radar} localTime={t} lay={metricLay} />
         ) : null}
 
-        {!scene.battle && !scene.compare && !scene.metric && scene.dataviz ? (
+        {!scene.battle && !scene.compare && !scene.metric && scene.radar ? (
+          <RadarHUD radar={scene.radar} localTime={t} lay={radarHudLay} />
+        ) : null}
+
+        {!scene.battle && !scene.compare && !scene.metric && !scene.radar && scene.dataviz ? (
           <DataVizCard viz={scene.dataviz} localTime={t} lay={datavizLay} />
         ) : null}
 
