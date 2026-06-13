@@ -346,6 +346,18 @@ import {
 
 **字体**：Orbitron（大数字）· Rajdhani（HUD 标签）· Share Tech Mono（参数值）
 
+### 预览舞台组件样式（`src/features/preview/`）
+
+| 组件 | JSX | CSS | 设计 spec |
+|------|-----|-----|-----------|
+| 擂台 PK | `ArenaPKCard.jsx` | `arena-pk.css` | batch1 §3.3 |
+| 拍摄引导 HUD | `ShootGuideHUDCard.jsx` | `shoot-guide-hud.css` | batch2 |
+| 雷达 HUD | `RadarHUDCard.jsx` | `radar-hud.css` | batch1 §3.4 |
+| 数据可视化卡 | `DataVizCard.jsx` / `StatRingCard.jsx` | `dataviz.css` | batch1 §3.1–3.2 |
+| 转场层（6 种） | `PreviewStage.jsx` | `transitions.css` | batch1 §3.5 |
+
+渲染优先级（与 Remotion 对齐）：`battle > shootGuide > metric > radar > dataviz > info-card`
+
 ---
 
 ## 8. 文件索引
@@ -360,6 +372,14 @@ src/design/
   polish.css        ← 动效打磨层
   index.css         ← 样式总入口
 
+src/features/preview/
+  ArenaPKCard.jsx       + arena-pk.css
+  ShootGuideHUDCard.jsx + shoot-guide-hud.css
+  RadarHUDCard.jsx      + radar-hud.css
+  DataVizCard.jsx       + dataviz.css
+  StatRingCard.jsx      + dataviz.css
+  PreviewStage.jsx      + transitions.css
+
 src/components/ui/
   Button.jsx … UploadZone.jsx
   index.js          ← 组件 barrel export
@@ -372,4 +392,4 @@ docs/
 
 ---
 
-*维护：UX/UI 设计师 · 2026-06-11 · Round 1 T3 + 游戏化批次1*
+*维护：UX/UI 设计师 · 2026-06-13 · 游戏化 P0–P2 预览样式全量落盘*

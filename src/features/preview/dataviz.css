@@ -278,3 +278,10 @@
   background: linear-gradient(90deg, var(--game-achievement, #ffd700), color-mix(in srgb, var(--game-achievement, #ffd700) 60%, #fff));
   box-shadow: 0 0 14px color-mix(in srgb, var(--game-achievement, #ffd700) 50%, transparent);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-node circle,
+  .sr-node text {
+    transition: none;
+  }
+}

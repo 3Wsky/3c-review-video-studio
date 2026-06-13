@@ -236,6 +236,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .vt-speed-line i,
+  .vt-speed-line::after,
+  .vt-scan-wipe::before,
   .vt-glitch-cut::before,
   .vt-glitch-cut::after,
   .vt-pixel-dissolve,
