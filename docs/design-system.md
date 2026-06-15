@@ -285,7 +285,7 @@ import {
 | 断点 | 行为 |
 |------|------|
 | `≤ 820px` | 起片输入换行全宽 · 编导区单列 · Segment 4列→2列 · 预览全宽 · 时间线触控加大 |
-| `≤ 640px` | 工具栏图标模式 · 粘性场景切换条 · 剪辑操作全宽 · 安全区 padding |
+| `≤ 640px` | 工具栏图标模式 · 粘性场景切换条 · 底部快捷操作坞 · 剪辑操作全宽 · 安全区 padding |
 | `> 820px` | 导演台 max-width 1180px 居中 · 编导双栏 |
 
 ---
@@ -302,6 +302,8 @@ import {
 | 素材落盘目录（架构师） | `public/game-assets/` |
 
 **字体**：Orbitron（大数字）· Rajdhani（HUD 标签）· Share Tech Mono（参数值）
+
+**移动端快捷坞**（≤640px）：`MobileActionDock.jsx` — 体检 / 闸门 / 渲染 / 预览 / 导出，复用 legacy 工具栏按钮 id。
 
 ### 预览舞台组件样式（`src/features/preview/`）
 

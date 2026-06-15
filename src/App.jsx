@@ -1,4 +1,5 @@
 import PhaseNav from "./components/PhaseNav.jsx";
+import MobileActionDock from "./components/MobileActionDock.jsx";
 
 import { TopBar } from "./components/ui/index.js";
 
@@ -45,6 +46,7 @@ export default function App() {
 
       <RemotionDrawer />
       <QualityOverlays />
+      <MobileActionDock />
 
 
 

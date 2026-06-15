@@ -304,3 +304,105 @@
     backdrop-filter: none;
   }
 }
+
+/* ── 底部快捷操作坞（仅移动端） ── */
+.mobile-action-dock {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-action-dock {
+    display: flex;
+    position: fixed;
+    left: var(--ds-space-4);
+    right: var(--ds-space-4);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--ds-space-3));
+    z-index: 25;
+    gap: var(--ds-space-2);
+    padding: var(--ds-space-2);
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: rgba(8, 8, 14, 0.94);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .mobile-action-dock__btn {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: var(--ds-space-2) var(--ds-space-1);
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.1;
+    cursor: pointer;
+    transition:
+      background var(--ds-duration-fast) var(--ds-ease),
+      color var(--ds-duration-fast) var(--ds-ease),
+      transform var(--ds-duration-fast) var(--ds-ease);
+  }
+
+  .mobile-action-dock__btn svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2.25;
+  }
+
+  .mobile-action-dock__btn:active {
+    transform: scale(0.94);
+  }
+
+  .mobile-action-dock__btn--checkup {
+    color: #d4b8ff;
+  }
+
+  .mobile-action-dock__btn--gate {
+    color: #8ef0c4;
+  }
+
+  .mobile-action-dock__btn--render {
+    color: #ffd28a;
+  }
+
+  .mobile-action-dock__btn:hover,
+  .mobile-action-dock__btn:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--ink);
+    outline: none;
+  }
+
+  /* 为底部坞留出滚动空间，避免遮挡内容 */
+  .director {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--ds-space-6));
+  }
+
+  /* 场景切换条上移到坞上方 */
+  .preview-col .scene-nav {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 68px);
+  }
+
+  /* 导出下拉在移动端向上展开 */
+  .export-dropdown {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-action-dock {
+    backdrop-filter: none;
+  }
+
+  .mobile-action-dock__btn:active {
+    transform: none;
+  }
+}
