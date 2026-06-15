@@ -1,0 +1,39 @@
+{
+  "format": "9:16",
+  "engine": "hyperframes",
+  "voice": "none",
+  "timeline": {
+    "project": { "title": "E2E Gamified", "product": "Test Phone" },
+    "timeline": [
+      {
+        "id": "s1",
+        "duration": 3,
+        "visual": {
+          "type": "arena",
+          "compare": {
+            "style": "arena",
+            "products": ["Phone A", "Phone B"],
+            "rows": [{ "label": "Battery", "values": ["12h", "18h"], "better": "high" }]
+          },
+          "transition": { "in": "speed-line" }
+        }
+      },
+      {
+        "id": "s2",
+        "duration": 3,
+        "visual": {
+          "radar": {
+            "dims": [
+              { "label": "Perf", "value": 90 },
+              { "label": "Batt", "value": 70 },
+              { "label": "Cam", "value": 85 },
+              { "label": "Disp", "value": 80 },
+              { "label": "Design", "value": 75 }
+            ]
+          },
+          "transition": { "in": "iris-close" }
+        }
+      }
+    ]
+  }
+}
