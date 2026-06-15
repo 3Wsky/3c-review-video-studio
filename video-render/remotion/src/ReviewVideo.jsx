@@ -4,6 +4,7 @@
 //   - timeline : 导演台的 Timeline JSON（{ project, insights, timeline[] }）
 //   - format   : "9:16" | "16:9" | "1:1"
 //   - assetMap : { 素材名 -> 图片 URL（data: / blob: / http(s):） }，缺省则纯渐变背景
+//   - assetKinds : { 素材名 -> "video" | "image" }，视频背景用 OffthreadVideo
 //
 // 同一份组件既被 render.mjs 用于出 MP4，也被 <Player> 用于网页实时预览。
 
@@ -12,6 +13,7 @@ import {
   AbsoluteFill,
   Sequence,
   Img,
+  OffthreadVideo,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -1174,12 +1176,14 @@ function TransitionLayer({ kind, localTime }) {
   return null;
 }
 
-function Scene({ scene, formatKey, assetMap }) {
+function Scene({ scene, formatKey, assetMap, assetKinds }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = frame / fps; // 本镜局部时间（秒）
 
   const assetUrl = scene.asset && assetMap ? assetMap[scene.asset] : null;
+  const assetKind = scene.asset && assetKinds ? assetKinds[scene.asset] : "image";
+  const isVideoBg = assetKind === "video" || (assetUrl && /\.(mp4|webm|mov)(\?|#|$)/i.test(assetUrl));
 
   // Ken Burns：整镜缓慢推近 1 → 1.08
   const kb = 1 + 0.08 * Math.min(1, t / Math.max(0.0001, scene.duration));
@@ -1212,16 +1216,30 @@ function Scene({ scene, formatKey, assetMap }) {
       {/* 背景层 */}
       {assetUrl ? (
         <AbsoluteFill style={{ overflow: "hidden" }}>
-          <Img
-            src={assetUrl}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              transformOrigin: "50% 42%",
-              transform: `scale(${kb})`,
-            }}
-          />
+          {isVideoBg ? (
+            <OffthreadVideo
+              src={assetUrl}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                transformOrigin: "50% 42%",
+                transform: `scale(${kb})`,
+              }}
+              muted
+            />
+          ) : (
+            <Img
+              src={assetUrl}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                transformOrigin: "50% 42%",
+                transform: `scale(${kb})`,
+              }}
+            />
+          )}
         </AbsoluteFill>
       ) : (
         <AbsoluteFill
@@ -1398,7 +1416,7 @@ function Scene({ scene, formatKey, assetMap }) {
   );
 }
 
-export function ReviewVideo({ timeline, format = "9:16", assetMap = {} }) {
+export function ReviewVideo({ timeline, format = "9:16", assetMap = {}, assetKinds = {} }) {
   const { fps } = useVideoConfig();
   const comp = buildComposition(timeline, format);
   const formatKey = comp.format.cls === "fmt-16x9" ? "16:9" : comp.format.cls === "fmt-1x1" ? "1:1" : "9:16";
@@ -1410,7 +1428,7 @@ export function ReviewVideo({ timeline, format = "9:16", assetMap = {} }) {
         const dur = Math.max(1, Math.round(scene.duration * fps));
         return (
           <Sequence key={scene.id} from={from} durationInFrames={dur} name={`${scene.index}. ${scene.badge || scene.headline || ""}`}>
-            <Scene scene={scene} formatKey={formatKey} assetMap={assetMap} />
+            <Scene scene={scene} formatKey={formatKey} assetMap={assetMap} assetKinds={assetKinds} />
           </Sequence>
         );
       })}

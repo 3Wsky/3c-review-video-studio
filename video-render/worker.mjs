@@ -27,7 +27,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, readFile, readdir, cp, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname, resolve, basename, extname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildHtml, buildXiaohongshuCaption, resolveFormat } from "./build.mjs";
 import { keysFromEnv, pickStockPhotoUrl } from "./stock.mjs";
@@ -182,6 +182,68 @@ async function fillStockAssets(scenes, assetsDir, timeline, log) {
   }
 }
 
+const VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".m4v"]);
+
+function isRemoteUrl(url) {
+  return /^https?:\/\//i.test(String(url || ""));
+}
+
+function videoFileName(assetName, url) {
+  const base = basename(String(assetName || "remote.mp4").replace(/[^\w.\-]/g, "_"));
+  if (VIDEO_EXTS.has(extname(base).toLowerCase())) return base;
+  const fromUrl = /\.(mp4|webm|mov|m4v)(\?|#|$)/i.exec(String(url || ""));
+  const ext = fromUrl ? `.${fromUrl[1].toLowerCase()}` : ".mp4";
+  return base.includes(".") ? base : `${base}${ext}`;
+}
+
+// 下载远程 MP4（Agnes B-roll 等）到 assetsDir，供 Remotion / HyperFrames 本地引用。
+async function fillRemoteVideoAssets(scenes, assetsDir, remoteAssets, log) {
+  const jobs = [];
+  const seen = new Set();
+
+  const queue = (assetName, url) => {
+    const name = String(assetName || "").trim();
+    const href = String(url || "").trim();
+    if (!name || !isRemoteUrl(href)) return;
+    const key = `${name}\0${href}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    jobs.push({ assetName: name, url: href });
+  };
+
+  if (remoteAssets && typeof remoteAssets === "object") {
+    for (const [name, meta] of Object.entries(remoteAssets)) {
+      const url = typeof meta === "string" ? meta : meta?.url;
+      queue(name, url);
+    }
+  }
+
+  for (const s of scenes) {
+    const visual = s.visual || {};
+    if (visual.asset) queue(visual.asset, visual.broll?.videoUrl);
+    else if (visual.broll?.videoUrl) queue(`agnes_${visual.broll.taskId || "broll"}.mp4`, visual.broll.videoUrl);
+  }
+
+  for (const job of jobs) {
+    const fileName = videoFileName(job.assetName, job.url);
+    const dest = join(assetsDir, fileName);
+    if (existsSync(dest)) {
+      log(`远程空镜已缓存：${fileName}`);
+      continue;
+    }
+    try {
+      log(`下载远程空镜：${fileName} …`);
+      const resp = await fetch(job.url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const buf = Buffer.from(await resp.arrayBuffer());
+      await writeFile(dest, buf);
+      log(`远程空镜就绪：${fileName}（${(buf.length / 1024).toFixed(0)}KB）`);
+    } catch (e) {
+      log(`远程空镜下载失败 ${fileName}：${e.message}`);
+    }
+  }
+}
+
 // 用 HyperFrames 渲染无声视频：buildHtml → npx hyperframes render。
 async function renderSilentHyperframes({ work, timeline, assetsDir, format, gpu }, log) {
   const html = buildHtml(timeline, { assetsDir, format });
@@ -216,7 +278,7 @@ async function renderSilentRemotion({ work, timeline, assetsDir, format }, log) 
   return silent;
 }
 
-async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, format, engine }, log) {
+async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, remoteAssets, autoStock, format, engine }, log) {
   const scenes = Array.isArray(timeline?.timeline) ? timeline.timeline : [];
   if (scenes.length === 0) throw new Error("Timeline 为空：timeline[] 没有分镜");
   const eng = VALID_ENGINES.has(String(engine || "").trim()) ? String(engine).trim() : "hyperframes";
@@ -277,6 +339,9 @@ async function renderJob({ timeline, voice, cloneSpkId, gpu, assets, autoStock, 
 
   // 2.5) 缺图自动空镜（可选，需 PEXELS/PIXABAY key）
   if (autoStock) await fillStockAssets(scenes, assetsDir, timeline, log);
+
+  // 2.6) Agnes / 远程 MP4 空镜（预览端写入 broll.videoUrl 或 remoteAssets）
+  await fillRemoteVideoAssets(scenes, assetsDir, remoteAssets, log);
 
   // 3+4) 按引擎渲染无声视频（按请求画幅：9:16 / 16:9 / 1:1）
   log(`渲染引擎：${eng}`);

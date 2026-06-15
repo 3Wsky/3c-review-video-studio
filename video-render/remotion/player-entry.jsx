@@ -15,13 +15,22 @@ import { Player } from "@remotion/player";
 import { ReviewVideo } from "./src/ReviewVideo.jsx";
 import { buildComposition } from "./src/scene-model.mjs";
 
-function PlayerWrap({ timeline, format, assetMap }) {
+function inferAssetKinds(assetMap) {
+  const kinds = {};
+  for (const [name, url] of Object.entries(assetMap || {})) {
+    kinds[name] = /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(String(url || "")) ? "video" : "image";
+  }
+  return kinds;
+}
+
+function PlayerWrap({ timeline, format, assetMap, assetKinds }) {
   const comp = buildComposition(timeline, format);
+  const kinds = assetKinds || inferAssetKinds(assetMap);
   // 画幅自适应容器宽度（保持合成的真实宽高比由 compositionWidth/Height 决定）
   return (
     <Player
       component={ReviewVideo}
-      inputProps={{ timeline, format, assetMap }}
+      inputProps={{ timeline, format, assetMap, assetKinds: kinds }}
       durationInFrames={comp.durationInFrames}
       compositionWidth={comp.width}
       compositionHeight={comp.height}

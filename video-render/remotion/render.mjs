@@ -17,11 +17,13 @@ import { bundle } from "@remotion/bundler";
 import { selectComposition, renderMedia } from "@remotion/renderer";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { basename, extname, join, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { entryIsVideo } from "../../shared/asset-kind.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const IMG_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"]);
+const VIDEO_EXTS = new Set([".mp4", ".webm", ".mov", ".m4v"]);
 const MIME = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -51,26 +53,67 @@ function fileToDataUrl(file) {
   return `data:${mime};base64,${b64}`;
 }
 
-// 扫 assets 目录，把 timeline 里引用到的素材名解析成 data URL（精确匹配，否则用第一张兜底）。
+// 扫 assets 目录，把 timeline 里引用到的素材名解析成 URL（图片 data URL / 视频 file URL）。
+// 返回 { assetMap, assetKinds }，assetKinds[name] = "video" | "image"。
 function buildAssetMap(timeline, assetsDir) {
-  const map = {};
-  if (!assetsDir || !existsSync(assetsDir)) return map;
-  const files = readdirSync(assetsDir).filter((f) => IMG_EXTS.has(extname(f).toLowerCase()));
-  if (files.length === 0) return map;
-  const fallback = files[0];
+  const assetMap = {};
+  const assetKinds = {};
+  if (!assetsDir || !existsSync(assetsDir)) return { assetMap, assetKinds };
+
+  const allFiles = readdirSync(assetsDir);
+  const images = allFiles.filter((f) => IMG_EXTS.has(extname(f).toLowerCase()));
+  const videos = allFiles.filter((f) => VIDEO_EXTS.has(extname(f).toLowerCase()));
+  if (images.length === 0 && videos.length === 0) return { assetMap, assetKinds };
+
+  const imgFallback = images[0] || null;
+  const vidFallback = videos[0] || null;
   const scenes = Array.isArray(timeline?.timeline) ? timeline.timeline : [];
   const names = new Set();
   for (const s of scenes) {
     const name = String(s?.visual?.asset || "").trim();
     if (name) names.add(name);
   }
+
+  const matchFile = (files, ref) => {
+    const base = basename(ref);
+    const stem = base.includes(".") ? base.slice(0, base.lastIndexOf(".")) : base;
+    return files.find((f) => {
+      const fb = basename(f);
+      const fs = fb.includes(".") ? fb.slice(0, fb.lastIndexOf(".")) : fb;
+      return (
+        fb === base ||
+        fb.toLowerCase() === base.toLowerCase() ||
+        fs === base ||
+        fs.toLowerCase() === base.toLowerCase() ||
+        fs === stem ||
+        fs.toLowerCase() === stem.toLowerCase()
+      );
+    });
+  };
+
   for (const name of names) {
     const base = basename(name);
-    const exact = files.find((f) => f === base || f.toLowerCase() === base.toLowerCase());
-    const pick = exact || fallback;
-    map[name] = fileToDataUrl(join(assetsDir, pick));
+    const vidExact = matchFile(videos, base);
+    const imgExact = matchFile(images, base);
+    const brollUrl = scenes.find((s) => String(s?.visual?.asset || "").trim() === name)?.visual?.broll?.videoUrl;
+
+    if (vidExact || entryIsVideo({ url: brollUrl })) {
+      const pick = vidExact || vidFallback;
+      if (pick) {
+        assetMap[name] = pathToFileURL(join(assetsDir, pick)).href;
+        assetKinds[name] = "video";
+      }
+      continue;
+    }
+
+    const pick = imgExact || imgFallback;
+    if (pick) {
+      assetMap[name] = fileToDataUrl(join(assetsDir, pick));
+      assetKinds[name] = "image";
+    }
   }
-  return map;
+
+  return { assetMap, assetKinds };
 }
 
 async function main() {
@@ -82,7 +125,7 @@ async function main() {
     process.exit(1);
   }
   const timeline = JSON.parse(readFileSync(resolve(args.in), "utf8"));
-  const assetMap = buildAssetMap(timeline, args.assets ? resolve(args.assets) : null);
+  const { assetMap, assetKinds } = buildAssetMap(timeline, args.assets ? resolve(args.assets) : null);
 
   const entry = join(__dirname, "src", "index.jsx");
   console.log("[remotion] bundling…");
@@ -91,7 +134,7 @@ async function main() {
     // 静态站不需要 webpack override；保持默认
   });
 
-  const inputProps = { timeline, format: args.format, assetMap };
+  const inputProps = { timeline, format: args.format, assetMap, assetKinds };
   console.log("[remotion] selecting composition…");
   const composition = await selectComposition({
     serveUrl,

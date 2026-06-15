@@ -1640,16 +1640,32 @@ async function performRender(data, apiBase, voice) {
   if (voice === "clone") body.cloneSpkId = initialState.cloneSpkId || "";
   if (els.autoStockToggle && els.autoStockToggle.checked) body.autoStock = true;
   if (els.renderFormat && els.renderFormat.value) body.format = els.renderFormat.value;
-  // 把上传图编码成 base64 发给 worker（key 和 scene.visual.asset 一致，worker 写到 assetsDir）
+  // 游戏化 HUD / Agnes 空镜依赖 Remotion 合成（HyperFrames 模板不含擂台/雷达等组件）
+  body.engine = "remotion";
+  // 图片 base64 内联；远程 MP4（Agnes 等）由 worker 按 URL 下载，避免超大请求体
   const assetKeys = Object.keys(assetEntries);
   if (assetKeys.length) {
     const assets = {};
+    const remoteAssets = {};
     await Promise.all(
       assetKeys.map(async (key) => {
-        try { assets[key] = await urlToBase64(assetEntries[key].url); } catch (e) { /* skip */ }
+        const entry = assetEntries[key];
+        const isVideo =
+          (entry.type && entry.type.startsWith("video/")) ||
+          /\.(mp4|webm|mov)(\?|#|$)/i.test(String(entry.url || ""));
+        if (isVideo) {
+          remoteAssets[key] = { url: entry.url, type: entry.type || "video/mp4" };
+          return;
+        }
+        try {
+          assets[key] = await urlToBase64(entry.url);
+        } catch (e) {
+          /* skip */
+        }
       })
     );
     if (Object.keys(assets).length) body.assets = assets;
+    if (Object.keys(remoteAssets).length) body.remoteAssets = remoteAssets;
   }
 
   try {
@@ -1785,19 +1801,34 @@ function loadRemotionPlayerScript() {
 
 // ---- 预览↔后端共用：按镜号把上传图轮询分配给各镜 ----
 // 返回 { timeline(已重写 visual.asset), assetEntries: { key: {url,type} } }
-// 没有上传图时返回原 timeline + 空 assetEntries。
+// 分镜已绑定素材名（含 Agnes 远程 MP4）时保留原名；无图时返回原 timeline。
 function assignSceneAssets(data) {
   const scenes = Array.isArray(data.timeline) ? data.timeline : [];
-  const imgs = initialState.assets.filter((a) => a.type && a.type.startsWith("image/") && a.url);
-  if (!imgs.length) return { timeline: data, assetEntries: {} };
+  const pool = initialState.assets.filter((a) => a.url && a.type);
+  const imgs = pool.filter((a) => a.type.startsWith("image/"));
   const assetEntries = {};
+  const findAsset = (name) => pool.find((a) => a.name === name);
+
   const rewritten = scenes.map((scene, i) => {
+    const visual = { ...(scene.visual || {}) };
+    const bound = visual.asset ? findAsset(visual.asset) : null;
+    if (bound) {
+      assetEntries[visual.asset] = { url: bound.url, type: bound.type };
+      return { ...scene, visual };
+    }
+    if (visual.broll?.videoUrl) {
+      const key = visual.asset || `agnes_scene_${i}.mp4`;
+      assetEntries[key] = { url: visual.broll.videoUrl, type: "video/mp4" };
+      return { ...scene, visual: { ...visual, asset: key } };
+    }
+    if (!imgs.length) return scene;
     const img = imgs[i % imgs.length];
     const ext = (img.type || "image/png").split("/")[1] || "png";
     const key = `scene-${i}.${ext === "jpeg" ? "jpg" : ext}`;
     assetEntries[key] = { url: img.url, type: img.type };
-    return { ...scene, visual: { ...(scene.visual || {}), asset: key } };
+    return { ...scene, visual: { ...visual, asset: key } };
   });
+
   return { timeline: { ...data, timeline: rewritten }, assetEntries };
 }
 
@@ -1820,10 +1851,15 @@ function buildRemotionProps() {
   const format = (els.renderFormat && els.renderFormat.value) || "9:16";
   const { timeline, assetEntries } = assignSceneAssets(data);
   const assetMap = {};
+  const assetKinds = {};
   for (const [key, entry] of Object.entries(assetEntries)) {
     assetMap[key] = entry.url;
+    const isVideo =
+      (entry.type && entry.type.startsWith("video/")) ||
+      /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(String(entry.url || ""));
+    assetKinds[key] = isVideo ? "video" : "image";
   }
-  return { timeline, format, assetMap };
+  return { timeline, format, assetMap, assetKinds };
 }
 
 function updateRemotionFormatNote(format) {

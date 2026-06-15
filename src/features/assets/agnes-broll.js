@@ -69,7 +69,7 @@ export async function pollAgnesTask(taskId) {
  * @param {{ videoUrl: string; prompt: string; taskId: string }} meta
  */
 export function applyAgnesBrollToScene(sceneIndex, { videoUrl, prompt, taskId }) {
-  const assetName = `agnes_${String(taskId).slice(-8)}`;
+  const assetName = `agnes_${String(taskId).slice(-8)}.mp4`;
   directorApi.applyAgnesBroll?.(sceneIndex, {
     assetName,
     videoUrl,

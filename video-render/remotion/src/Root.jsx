@@ -16,7 +16,7 @@ export const RemotionRoot = () => {
       durationInFrames={300}
       width={1080}
       height={1920}
-      defaultProps={{ timeline: sampleTimeline, format: "9:16", assetMap: {} }}
+      defaultProps={{ timeline: sampleTimeline, format: "9:16", assetMap: {}, assetKinds: {} }}
       calculateMetadata={({ props }) => {
         const comp = buildComposition(props.timeline, props.format);
         return {
