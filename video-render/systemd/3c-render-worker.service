@@ -1,0 +1,19 @@
+[Unit]
+Description=3C Review Video Render Worker (:9234)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=administrator
+WorkingDirectory=/mnt/f/3c-review-video-studio/video-render
+EnvironmentFile=-/mnt/f/3c-review-video-studio/video-render/worker.env
+Environment=PORT=9234
+ExecStart=/usr/bin/node worker.mjs
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
