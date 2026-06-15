@@ -435,7 +435,7 @@ battle > shootGuide > metric(StatRing+radar节点) > radar(独立) > dataviz > i
 | 预览 | `src/features/preview/RadarHUDCard.jsx` + `radar-hud.css` |
 | 几何 | `shared/dataviz/geometry.mjs` |
 | 归一化 | `video-render/remotion/src/scene-model.mjs` → `normalizeRadar()` |
-| Remotion | `ReviewVideo.jsx` → `<RadarHUD>`（架构师 P2 进行中） |
+| Remotion | `ReviewVideo.jsx` → `<RadarHUD>` ✅ commit `a1e376c` |
 
 ---
 
@@ -452,7 +452,7 @@ battle > shootGuide > metric(StatRing+radar节点) > radar(独立) > dataviz > i
 
 **iris-close 参数**：径向遮罩 scale 2.2→0，box-shadow 9999px 模拟光圈闭合。
 
-预览 CSS 见 `src/features/preview/transitions.css`；Remotion 帧动画待架构师对齐。
+预览 CSS 见 `src/features/preview/transitions.css`；Remotion `TransitionLayer` 六种转场帧插值已对齐 ✅ commit `a1e376c`。
 
 ---
 
@@ -464,9 +464,10 @@ battle > shootGuide > metric(StatRing+radar节点) > radar(独立) > dataviz > i
 | **P0** | 素材落盘 | ✅ 清单 §2 | 解压 zip → `public/game-assets/` |
 | **P0** | Stat Ring 布局+动效 | ✅ §3.1 | GSAP 模板 + 升级 DataVizCard |
 | **P0** | 速度线 + 扫描 wipe | ✅ §3.2 | HyperFrames 转场插件 |
-| **P1** | 擂台 PK | ✅ §3.3 线框 | 新模板 `ArenaPK` |
-| **P1** | 拍摄引导 HUD | 批次2 | `ShootGuideHUD` 组件 |
-| **P2** | 雷达 HUD / 技能树 | 批次2 | 扩展 dataviz kind |
+| **P1** | 擂台 PK | ✅ §3.3 线框 + 预览/Remotion | `ArenaPKCard` + `ReviewVideo` commit `6aa53b5` |
+| **P1** | 拍摄引导 HUD | ✅ batch2 线框 + 预览/Remotion | `ShootGuideHUDCard` commit `6aa53b5` |
+| **P2** | 雷达 HUD | ✅ §3.4 + 预览/Remotion | `RadarHUDCard` + `<RadarHUD>` commit `a1e376c` |
+| **P2** | 转场库（6 种） | ✅ §3.2 + §3.5 | `transitions.css` + Remotion commit `a1e376c` |
 
 ---
 

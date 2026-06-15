@@ -232,61 +232,17 @@ flowchart LR
 | **UploadZone** | `ds-upload` | id, label, compact, accept, onFile | ✅ |
 | **SectionHead** | `ds-section-head` | title, action | ✅ |
 
-### 4.2 待实现（Round 2+）
+### 4.2 编导组件（Round 2 · 已实现）
 
-#### TimelineTrack
-
-横向时间线标尺 + 可点击色块条。
-
-```
-Props: scenes: {id, start, end, label, color?}[]
-       currentId, onSelect(id)
-布局: 上方时间刻度 · 下方 clip 色块（宽度 ∝ duration）
-交互: 点击色块选中 · hover 显示 tooltip（时长/标题）
-样式: --ds-soft 轨道底 · accent-grad 当前选中 · 交替色相区分镜头
-```
-
-#### ClipCard
-
-分镜卡片，列表中展示单镜头摘要。
-
-```
-Props: scene, index, active, onSelect, onEdit, actions[]
-结构: header(序号+时长) · body(口播摘要) · footer(操作按钮)
-状态: .active → 左边框 accent 4px + 微光
-密度: padding 12px · 字号 13px · 最多 2 行口播 preview
-```
-
-#### Inspector
-
-右侧检视面板，随选中 Clip 变化。
-
-```
-Props: scene, onChange(field, value)
-分区: 口播编辑 · 字幕 · 视觉类型 · 素材选择 · 布局
-联动: 修改即时同步 store + 预览刷新
-```
-
-#### Modal
-
-全屏遮罩弹窗（留人体检、确认对话框）。
-
-```
-Props: open, onClose, title, subtitle, size: sm/md/lg, children
-结构: overlay(blur) · card(圆角 2xl) · head · body · foot(actions)
-动画: fade 0.16s · ESC 关闭 · 点击遮罩关闭（可配置）
-z-index: 60
-```
-
-#### Toast
-
-轻量通知，右下角或顶部居中堆叠。
-
-```
-Props: message, tone, duration(默认 4s), action?
-行为: 自动消失 · 最多 3 条堆叠 · 不阻断操作
-样式: panel 底 + 左侧 tone 色条 · 字号 sm
-```
+| 组件 | 路径 | 状态 |
+|------|------|------|
+| **TimelineTrack** | `src/components/ui/TimelineTrack.jsx` | ✅ 横向标尺 + 可点击色块 |
+| **ClipCard** | `src/components/ui/ClipCard.jsx` | ✅ 分镜摘要卡，选中左边框 accent |
+| **Inspector** | `src/components/ui/Inspector.jsx` | ✅ 右侧检视，随选中 Clip 联动 |
+| **Modal** | `src/components/ui/Modal.jsx` | ✅ 遮罩弹窗（质控弹窗复用） |
+| **Toast** | `src/components/ui/Toast.jsx` | ✅ 轻量通知堆叠 |
+| **CheckupModal** | `src/features/quality/CheckupModal.jsx` | ✅ 留人体检专用 |
+| **GateModal** | `src/features/quality/GateModal.jsx` | ✅ 质检闸门专用 |
 
 ---
 
@@ -392,4 +348,4 @@ docs/
 
 ---
 
-*维护：UX/UI 设计师 · 2026-06-13 · 游戏化 P0–P2 预览样式全量落盘*
+*维护：UX/UI 设计师 · 2026-06-15 · 游戏化 P0–P2 双端全量上线，文档与实现状态已同步*
