@@ -165,7 +165,10 @@
   .tao-glow-ring,
   .tao-sparkles,
   .tao-title-main,
-  .tao-node-pulse {
+  .tao-node-pulse,
+  .tao-stage-container[data-phase="4"] .tao-node-left,
+  .tao-stage-container[data-phase="4"] .tao-node-right,
+  .tao-stage-container[data-phase="4"] .tao-node-bottom {
     animation: none !important;
   }
 }

@@ -1,6 +1,6 @@
 {
   "format": "9:16",
-  "engine": "hyperframes",
+  "engine": "remotion",
   "voice": "none",
   "timeline": {
     "project": { "title": "E2E Gamified", "product": "Test Phone" },

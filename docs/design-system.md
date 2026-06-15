@@ -340,9 +340,11 @@ src/features/preview/
   StatRingCard.jsx      + dataviz.css
   PreviewStage.jsx      + transitions.css
 
-src/components/ui/
-  Button.jsx … UploadZone.jsx
-  index.js          ← 组件 barrel export
+src/components/
+  MobileActionDock.jsx  ← 移动端底部快捷操作坞
+  ui/
+    Button.jsx … UploadZone.jsx
+    index.js          ← 组件 barrel export
 
 docs/
   design-system.md              ← 本文档

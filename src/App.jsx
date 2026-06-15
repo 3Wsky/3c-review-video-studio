@@ -90,9 +90,10 @@ export default function App() {
 
 
 
-          <div class="tao-stage-container">
+          <div class="tao-stage-container" id="taoStageContainer" data-phase="1">
 
-            <div class="tao-stage tao-stage-1" id="taoStage1">
+            {/* 壹：核心需求节点，仅在阶段 1 突出展示，阶段 2 向上移开并淡出 */}
+            <div class="tao-main-node" id="taoMainNode">
 
               <div class="tao-node-pulse"></div>
 
@@ -110,69 +111,41 @@ export default function App() {
 
 
 
-            <div class="tao-stage tao-stage-2" id="taoStage2" hidden>
+            {/* 长期存续的演化节点（阴阳/天地） */}
+            <div class="tao-evolve-node tao-node-left" id="taoNodeLeft">
 
-              <div class="tao-stage-row">
+              <div class="tao-node-icon" id="taoIconLeft">阴</div>
 
-                <div class="tao-node">
+              <div class="tao-node-title" id="taoTitleLeft">知乎真实口碑</div>
 
-                  <div class="tao-node-icon">阴</div>
+              <div class="tao-node-desc">搜罗真实评测，提炼大众口碑</div>
 
-                  <div class="tao-node-title">知乎真实口碑</div>
+            </div>
 
-                  <div class="tao-node-desc">搜罗真实评测，提炼大众口碑</div>
+            <div class="tao-evolve-node tao-node-right" id="taoNodeRight">
 
-                </div>
+              <div class="tao-node-icon" id="taoIconRight">阳</div>
 
-                <div class="tao-node">
+              <div class="tao-node-title" id="taoTitleRight">产品核心事实</div>
 
-                  <div class="tao-node-icon">阳</div>
-
-                  <div class="tao-node-title">产品核心事实</div>
-
-                  <div class="tao-node-desc">核对事实参数，挖掘核心卖点</div>
-
-                </div>
-
-              </div>
+              <div class="tao-node-desc">核对事实参数，挖掘核心卖点</div>
 
             </div>
 
 
 
-            <div class="tao-stage tao-stage-3" id="taoStage3" hidden>
+            {/* 第三极：人节点，仅在阶段 3 凝聚点亮并淡入 */}
+            <div class="tao-evolve-node tao-node-bottom" id="taoNodeBottom">
 
-              <div class="tao-stage-grid">
+              <div class="tao-node-pulse"></div>
 
-                <div class="tao-node">
+              <div class="tao-node-content">
 
-                  <div class="tao-node-icon">天</div>
+                <div class="tao-node-icon">人</div>
 
-                  <div class="tao-node-title">知乎真实口碑</div>
+                <div class="tao-node-title">口播与素材匹配</div>
 
-                  <div class="tao-node-desc">搜罗真实评测，提炼大众口碑</div>
-
-                </div>
-
-                <div class="tao-node">
-
-                  <div class="tao-node-icon">地</div>
-
-                  <div class="tao-node-title">产品核心事实</div>
-
-                  <div class="tao-node-desc">核对事实参数，挖掘核心卖点</div>
-
-                </div>
-
-                <div class="tao-node tao-node-center">
-
-                  <div class="tao-node-icon">人</div>
-
-                  <div class="tao-node-title">口播与素材匹配</div>
-
-                  <div class="tao-node-desc">生成原创脚本，匹配实拍分镜</div>
-
-                </div>
+                <div class="tao-node-desc">生成原创脚本，匹配实拍分镜</div>
 
               </div>
 

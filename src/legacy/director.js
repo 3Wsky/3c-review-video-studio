@@ -645,76 +645,90 @@ function runTaoAnimation(product) {
 
     const subtitle = document.querySelector("#taoSubtitle");
     const desc1 = document.querySelector("#taoNodeDesc1");
-    const stage1 = document.querySelector("#taoStage1");
-    const stage2 = document.querySelector("#taoStage2");
-    const stage3 = document.querySelector("#taoStage3");
+    const stageContainer = document.querySelector("#taoStageContainer");
+    const iconLeft = document.querySelector("#taoIconLeft");
+    const iconRight = document.querySelector("#taoIconRight");
+    const titleLeft = document.querySelector("#taoTitleLeft");
+    const titleRight = document.querySelector("#taoTitleRight");
     const skipBtn = document.querySelector("#taoSkipBtn");
 
     if (desc1) desc1.textContent = `制作 ${product} 深度评测视频`;
 
-    // Reset states
-    overlay.hidden = false;
-    overlay.style.opacity = "1";
-    if (stage1) stage1.hidden = false;
-    if (stage2) stage2.hidden = true;
-    if (stage3) stage3.hidden = true;
+    const PHASE_MS = {
+      hold1: 2600,
+      hold2: 2800,
+      hold3: 2800,
+      hold4: 2000,
+    };
 
-    let timer1, timer2, timer3, timer4;
+    const timers = [];
     let isSkipped = false;
+
+    const setPhase = (phase) => {
+      if (stageContainer) stageContainer.dataset.phase = String(phase);
+    };
+
+    const schedule = (fn, ms) => {
+      const id = setTimeout(fn, ms);
+      timers.push(id);
+      return id;
+    };
 
     const cleanup = () => {
       if (isSkipped) return;
       isSkipped = true;
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      clearTimeout(timer4);
+      timers.forEach(clearTimeout);
       overlay.style.opacity = "0";
       setTimeout(() => {
         overlay.hidden = true;
+        setPhase(0);
         resolve();
-      }, 800); // matches CSS transition
+      }, 800);
     };
 
     if (skipBtn) {
-      skipBtn.onclick = () => {
-        cleanup();
-      };
+      skipBtn.onclick = cleanup;
     }
 
-    // Step 1: 道生一
-    if (subtitle) subtitle.textContent = "道生一：混沌初开，意念凝聚成形...";
-    
-    // Step 2: 一生二 (after 2.5s)
-    timer1 = setTimeout(() => {
+    // Reset → 道生一
+    overlay.hidden = false;
+    overlay.style.opacity = "1";
+    if (iconLeft) iconLeft.textContent = "阴";
+    if (iconRight) iconRight.textContent = "阳";
+    if (titleLeft) titleLeft.textContent = "知乎真实口碑";
+    if (titleRight) titleRight.textContent = "产品核心事实";
+    setPhase(1);
+    if (subtitle) subtitle.textContent = "道生一：混沌初开，意念凝聚成形…";
+
+    // 一生二：核心节点分裂，阴阳两仪渐现
+    schedule(() => {
       if (isSkipped) return;
-      if (stage1) stage1.hidden = true;
-      if (stage2) stage2.hidden = false;
-      if (subtitle) subtitle.textContent = "一生二：两仪分明，口碑与事实交织...";
+      setPhase(2);
+      if (subtitle) subtitle.textContent = "一生二：两仪分明，口碑与事实交织…";
+    }, PHASE_MS.hold1);
 
-      // Step 3: 二生三 (after 2.5s)
-      timer2 = setTimeout(() => {
-        if (isSkipped) return;
-        if (stage2) stage2.hidden = true;
-        if (stage3) stage3.hidden = false;
-        if (subtitle) subtitle.textContent = "二生三：三才合一，万物生生不息...";
+    // 二生三：第三极「人」自下方凝聚，天地人三才合一
+    schedule(() => {
+      if (isSkipped) return;
+      setPhase(3);
+      if (iconLeft) iconLeft.textContent = "天";
+      if (iconRight) iconRight.textContent = "地";
+      if (titleLeft) titleLeft.textContent = "知乎口碑";
+      if (titleRight) titleRight.textContent = "核心事实";
+      if (subtitle) subtitle.textContent = "二生三：天地人三才合一，万物将生…";
+    }, PHASE_MS.hold1 + PHASE_MS.hold2);
 
-        // Step 4: 三生万物 (after 2.5s)
-        timer3 = setTimeout(() => {
-          if (isSkipped) return;
-          if (subtitle) subtitle.textContent = "三生万物：万千分镜化生，导演台就绪！";
+    // 三生万物：全体共鸣后淡出
+    schedule(() => {
+      if (isSkipped) return;
+      setPhase(4);
+      if (subtitle) subtitle.textContent = "三生万物：万千分镜化生，导演台就绪！";
+    }, PHASE_MS.hold1 + PHASE_MS.hold2 + PHASE_MS.hold3);
 
-          // End animation (after 1.5s)
-          timer4 = setTimeout(() => {
-            if (isSkipped) return;
-            cleanup();
-          }, 1500);
-
-        }, 2500);
-
-      }, 2500);
-
-    }, 2500);
+    schedule(() => {
+      if (isSkipped) return;
+      cleanup();
+    }, PHASE_MS.hold1 + PHASE_MS.hold2 + PHASE_MS.hold3 + PHASE_MS.hold4);
   });
 }
 
