@@ -284,7 +284,8 @@ import {
 
 | 断点 | 行为 |
 |------|------|
-| `≤ 820px` | 起片输入换行全宽 · 编导区单列 · Segment 4列→2列 |
+| `≤ 820px` | 起片输入换行全宽 · 编导区单列 · Segment 4列→2列 · 预览全宽 · 时间线触控加大 |
+| `≤ 640px` | 工具栏图标模式 · 粘性场景切换条 · 剪辑操作全宽 · 安全区 padding |
 | `> 820px` | 导演台 max-width 1180px 居中 · 编导双栏 |
 
 ---
@@ -326,6 +327,7 @@ src/design/
   base.css          ← reset + body
   components.css    ← ds- 共享样式
   polish.css        ← 动效打磨层
+  mobile-director.css ← 导演台移动端专项
   index.css         ← 样式总入口
 
 src/features/preview/

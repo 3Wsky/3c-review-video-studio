@@ -1837,10 +1837,7 @@ textarea:focus {
   .editor-row {
     grid-template-columns: 1fr;
   }
-  .preview-col {
-    max-width: 320px;
-    margin: 0 auto;
-  }
+  /* preview-col 全宽见 mobile-director.css */
 }
 
 @media (max-width: 640px) {
