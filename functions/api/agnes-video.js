@@ -2,7 +2,7 @@
 // 文档：https://agnes-ai.com/doc/agnes-video-v20
 //
 // POST { prompt, imageUrl?, format?, durationSec?, poll? }
-//   → 创建任务；poll=true 时服务端轮询至完成（默认最多 120s）
+//   → 创建任务；poll=true 时服务端轮询至完成（默认 poll=false，客户端自行轮询避免 CF 120s 超时）
 // GET ?taskId=xxx
 //   → 查询任务状态
 
@@ -184,7 +184,7 @@ export async function onRequestPost(context) {
       return jsonResponse({ error: "Agnes 未返回 taskId", raw: created.raw }, 502);
     }
 
-    if (input.poll !== false) {
+    if (input.poll === true) {
       const maxWait = Number(input.maxWaitMs) > 0 ? Number(input.maxWaitMs) : 120000;
       const polled = await pollUntilDone(created.taskId, auth.apiKey, maxWait);
       return jsonResponse({ ...polled, polled: true });

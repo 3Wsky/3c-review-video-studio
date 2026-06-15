@@ -2462,6 +2462,47 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* Agnes B-roll 面板 */
+.agnes-broll-panel {
+  margin: 14px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.agnes-broll-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.agnes-broll-panel__title {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.agnes-broll-panel__status {
+  font-size: 12px;
+  color: var(--amber);
+}
+
+.agnes-broll-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agnes-broll-panel .ds-toast {
+  position: fixed;
+  bottom: 88px;
+  right: 16px;
+  z-index: 1100;
+  max-width: min(360px, 92vw);
+}
+
 /* 响应式适配 */
 @media (max-width: 600px) {
   .tao-stage-row {

@@ -2804,6 +2804,25 @@ function createDirectorApi() {
 
     addScene() {
       addScene();
+    },
+
+    applyAgnesBroll(index, { assetName, videoUrl, broll }) {
+      const scene = sceneAt(index);
+      if (!scene) return;
+      const name = assetName || `agnes_${Date.now()}`;
+      let asset = initialState.assets.find((a) => a.name === name);
+      if (asset) {
+        asset.url = videoUrl;
+        asset.type = "video/mp4";
+      } else {
+        initialState.assets.push({ name, url: videoUrl, type: "video/mp4" });
+      }
+      scene.visual = {
+        ...scene.visual,
+        asset: name,
+        broll: { ...broll }
+      };
+      renderAll(false);
     }
   };
 }

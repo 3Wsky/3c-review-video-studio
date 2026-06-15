@@ -199,9 +199,15 @@
       "title": "动态空镜穿插（情绪同向，禁无关风景）",
       "type": "object",
       "properties": {
-        "source": { "type": "string", "enum": ["pexels", "pixabay", "user"] },
+        "source": { "type": "string", "enum": ["pexels", "pixabay", "user", "agnes"] },
         "query": { "type": "string" },
-        "duration": { "type": "number", "exclusiveMinimum": 0 }
+        "duration": { "type": "number", "exclusiveMinimum": 0 },
+        "taskId": { "type": "string", "description": "Agnes 异步任务 ID" },
+        "status": {
+          "type": "string",
+          "enum": ["queued", "running", "completed", "failed", "timeout"]
+        },
+        "videoUrl": { "type": "string", "format": "uri", "description": "完成后远程 MP4 URL" }
       }
     },
     "dataviz": {

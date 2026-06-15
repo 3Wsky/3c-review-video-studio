@@ -31,9 +31,21 @@ export default function PreviewStage() {
   const product = timeline?.project?.product || "3C 产品";
 
   const asset = useMemo(() => {
+    const visual = scene?.visual || {};
+    const byName = visual.asset
+      ? assets.find((a) => a.name === visual.asset)
+      : null;
+    if (byName) return byName;
+    if (visual.broll?.videoUrl) {
+      return { name: visual.asset || "agnes_broll", url: visual.broll.videoUrl, type: "video/mp4" };
+    }
+    if (typeof visual.asset === "string" && /^https?:\/\//.test(visual.asset)) {
+      const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(visual.asset);
+      return { name: "remote_asset", url: visual.asset, type: isVideo ? "video/mp4" : "image/*" };
+    }
     if (!assets.length) return null;
     return assets[currentScene % assets.length];
-  }, [assets, currentScene]);
+  }, [assets, currentScene, scene?.visual?.asset, scene?.visual?.broll?.videoUrl]);
 
   const visual = scene?.visual || {};
   const sceneLabel = scene ? `${scene.index} / ${scenes.length}` : `1 / ${Math.max(scenes.length, 1)}`;
@@ -91,7 +103,9 @@ export default function PreviewStage() {
             class={`product-visual${asset?.cutout ? " is-cutout" : ""}`}
             id="productVisual"
           >
-            {asset?.type?.startsWith("image/") ? (
+            {asset?.type?.startsWith("video/") ? (
+              <video src={asset.url} autoPlay muted loop playsInline />
+            ) : asset?.type?.startsWith("image/") ? (
               <img src={asset.url} alt={asset.name || "产品素材"} />
             ) : (
               <div class="device-placeholder">

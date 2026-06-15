@@ -22,6 +22,7 @@ import {
   moveScene
 } from "./editor-bridge.js";
 import PreviewStage from "../preview/PreviewStage.jsx";
+import AgnesBrollPanel from "../assets/AgnesBrollPanel.jsx";
 
 const NUM_RE = /-?\d+(?:\.\d+)?/;
 
@@ -278,6 +279,8 @@ export default function EditorPanel() {
               />
             </Collapsible>
           ) : null}
+
+          {scene ? <AgnesBrollPanel /> : null}
 
           <div class="ce-actions">
             <Button size="sm" busy={busy} onClick={() => rewriteScene(currentScene)}>
