@@ -51,6 +51,8 @@ export function buildGenerateTimelinePrompt(input) {
     "radar": {"dims":[{"label":"性能","value":88,"max":100},{"label":"续航","value":72,"max":100},{"label":"影像","value":85,"max":100},{"label":"手感","value":78,"max":100}]}
     示例（痛点镜 shootGuide）：
     "shootGuide": {"variant":"product_macro","title":"拍一张痛点特写","steps":["对准问题部位","稳住2秒","自然光更佳"],"angle":"45°俯拍"}
+13. 口播与画面 headline 必须围绕「${input.productName || "本产品"}」这一款产品；每个分镜的 voiceover 或 visual.headline 中至少一处出现产品名或可识别的简称（如「这部 Mate」须指代明确）。
+14. 若「真实评测素材」的品类/主体与「${input.productName || "本产品"}」/「${input.category || "未提供"}」明显不符（例如素材讲耳机但产品是手机），必须**完全忽略**该素材，不得引用其痛点、场景、参数；仅依据产品名、品类常识与「产品事实」生成。
 
 输出结构：
 {
@@ -219,6 +221,25 @@ function ensureGamifiedVisual(scene, ctx) {
   return { ...scene, visual };
 }
 
+/** @param {Record<string, unknown>[]} timeline @param {Record<string, unknown>} input */
+function warnCategoryMismatch(timeline, input) {
+  const product = String(input.productName || "").trim();
+  const category = String(input.category || "").trim();
+  const isPhone = category === "手机" || /mate|nova|iphone|荣耀|小米|redmi|oppo|vivo/i.test(product);
+  const staleEarphone = /耳机|降噪|地铁杂音|入耳|airpods|freebuds|开会混音/i;
+  if (!isPhone) return;
+  for (const scene of timeline) {
+    const vo = String(scene.voiceover || "");
+    if (staleEarphone.test(vo) && !/耳机|buds|airpods/i.test(product)) {
+      console.warn(
+        "[generate-timeline] 口播疑似旧品类残留:",
+        scene.title,
+        vo.slice(0, 80)
+      );
+    }
+  }
+}
+
 /** @param {string} content */
 export function stripJsonFence(content) {
   return String(content || "")
@@ -308,4 +329,7 @@ export function normalizeTimelineResponse(data, input) {
     },
     timeline: normalized
   };
+
+  warnCategoryMismatch(normalized, input);
+  return result;
 }

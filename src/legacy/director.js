@@ -9,6 +9,9 @@ const initialState = {
   clonePromptText: ""
 };
 
+/** 上次一键生成使用的产品名；换品时清空旧素材/分镜，避免品类残留 */
+let lastGeneratedProduct = "";
+
 // 按产品名关键词推断品类（更具体的规则排在前面，避免 matebook/matepad 误判为手机）
 const CATEGORY_RULES = [
   { cat: "笔记本", kw: ["笔记本", "笔电", "macbook", "matebook", "redmibook", "magicbook", "thinkpad", "thinkbook", "拯救者", "游戏本", "轻薄本", "灵越", "幻", "暗影精灵", "星"] },
@@ -27,6 +30,24 @@ function inferCategory(name) {
     if (rule.kw.some((k) => lower.includes(k.toLowerCase()))) return rule.cat;
   }
   return "";
+}
+
+/** 换产品名后清空旧知乎素材、事实与分镜，并重新推断品类 */
+function prepareForNewProduct(product) {
+  const inferred = inferCategory(product);
+  if (inferred) els.category.value = inferred;
+  initialState.categoryTouched = false;
+
+  els.factsInput.value = "";
+  els.reviewInput.value = "";
+  if (els.zhihuQuery) els.zhihuQuery.value = product;
+  if (els.zhihuResults) els.zhihuResults.innerHTML = "";
+
+  initialState.timeline = [];
+  initialState.currentScene = 0;
+  initialState.generated = false;
+  renderAll(true);
+  window.dispatchEvent(new CustomEvent("director:update"));
 }
 
 const modules = [
@@ -743,7 +764,12 @@ async function oneClickGenerate() {
     return;
   }
 
-  // 用户没手动改过品类时，按产品名自动推断（避免默认「耳机」跑偏）
+  if (lastGeneratedProduct && lastGeneratedProduct !== product) {
+    prepareForNewProduct(product);
+  }
+  lastGeneratedProduct = product;
+
+  // 每次生成都按产品名刷新品类（用户未手动锁定时）
   if (!initialState.categoryTouched) {
     const inferred = inferCategory(product);
     if (inferred) els.category.value = inferred;
@@ -755,13 +781,18 @@ async function oneClickGenerate() {
   setBusy(true);
   setGenerating(true);
 
+  let zhihuOk = false;
   // Start the API generation promise
   const apiPromise = (async () => {
     setCueHint(`已识别品类「${els.category.value}」，正在搜索知乎抓取真实素材…`);
     try {
-      await searchZhihu({ silent: true });
+      await searchZhihu({ silent: true, freshReviews: true });
+      zhihuOk = Boolean(els.reviewInput.value.trim());
     } catch (error) {
       console.warn(error);
+    }
+    if (!zhihuOk) {
+      setCueHint("知乎素材未更新，将仅基于产品名与品类生成（已忽略旧评测素材）…");
     }
     setCueHint("正在用 MiMo 生成分镜，请稍候…");
     await generateTimelineFromApi();
@@ -840,10 +871,15 @@ function renderZhihuResults(items) {
 
 async function searchZhihu(options = {}) {
   const silent = options.silent === true;
+  const freshReviews = options.freshReviews === true;
   const query = (els.zhihuQuery && els.zhihuQuery.value.trim()) || els.productName.value.trim();
   if (!query) {
     setApiStatus("请先填关键词或产品名");
     return;
+  }
+
+  if (freshReviews && els.reviewInput) {
+    els.reviewInput.value = "";
   }
 
   const apiBase = getApiBase();
@@ -879,6 +915,9 @@ async function searchZhihu(options = {}) {
     setApiStatus("知乎搜索失败");
     if (els.zhihuResults) {
       els.zhihuResults.innerHTML = `<div class="zhihu-hint">${escapeHtml(error.message || "知乎搜索失败")}</div>`;
+    }
+    if (freshReviews && els.reviewInput) {
+      els.reviewInput.value = "";
     }
     if (!silent) throw error;
   } finally {
@@ -2550,6 +2589,7 @@ function loadDraft() {
   initialState.timeline = draft.timeline;
   initialState.currentScene = draft.currentScene || 0;
   initialState.generated = true;
+  lastGeneratedProduct = draft.productName || els.productName.value.trim() || "";
   document.querySelectorAll(".segment").forEach((seg) => {
     seg.classList.toggle("active", seg.dataset.layout === initialState.layout);
   });
@@ -2567,6 +2607,7 @@ function clearDraft() {
 
 function resetAll() {
   clearDraft();
+  lastGeneratedProduct = "";
   initialState.timeline = [];
   initialState.currentScene = 0;
   initialState.generated = false;
