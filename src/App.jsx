@@ -55,25 +55,27 @@ export default function App() {
       <div id="taoOverlay" class="tao-overlay" hidden>
 
         <div class="tao-bg-effects">
-
-          <svg class="tao-taichi-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-
-            <circle cx="50" cy="50" r="48" fill="none" stroke="var(--ds-accent)" stroke-width="0.5" opacity="0.2" />
-
-            <path d="M 50 2 A 48 48 0 0 0 50 98 A 24 24 0 0 1 50 50 A 24 24 0 0 0 50 2 Z" fill="rgba(255,255,255,0.02)" />
-
-            <path d="M 50 2 A 48 48 0 0 1 50 98 A 24 24 0 0 1 50 50 A 24 24 0 0 0 50 2 Z" fill="rgba(177,107,255,0.12)" />
-
-            <circle cx="50" cy="26" r="6" fill="rgba(177,107,255,0.8)" />
-
-            <circle cx="50" cy="74" r="6" fill="rgba(255,255,255,0.1)" />
-
+          <svg class="tao-taichi-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <radialGradient id="taoYang" cx="50%" cy="35%" r="65%">
+                <stop offset="0%" stop-color="#f0ece4" />
+                <stop offset="100%" stop-color="#c8c2b4" />
+              </radialGradient>
+              <radialGradient id="taoYin" cx="50%" cy="65%" r="65%">
+                <stop offset="0%" stop-color="#1a1a1a" />
+                <stop offset="100%" stop-color="#050505" />
+              </radialGradient>
+            </defs>
+            <circle cx="50" cy="50" r="49" fill="url(#taoYin)" stroke="#4a463c" stroke-width="0.7" opacity="0.95" />
+            <path
+              d="M50,1 A49,49 0 0,1 50,99 A24.5,24.5 0 0,1 50,50 A24.5,24.5 0 0,0 50,1 Z"
+              fill="url(#taoYang)"
+            />
+            <circle cx="50" cy="24.5" r="5.5" fill="#e8e4d8" />
+            <circle cx="50" cy="75.5" r="5.5" fill="#080808" />
           </svg>
-
-          <div class="tao-glow-ring"></div>
-
-          <div class="tao-sparkles"></div>
-
+          <div class="tao-glow-ring" />
+          <div class="tao-ink-mist" />
         </div>
 
 

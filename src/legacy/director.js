@@ -654,12 +654,15 @@ function runTaoAnimation(product) {
 
     if (desc1) desc1.textContent = `制作 ${product} 深度评测视频`;
 
-    const PHASE_MS = {
-      hold1: 2600,
-      hold2: 2800,
-      hold3: 2800,
-      hold4: 2000,
-    };
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const PHASE_MS = reducedMotion
+      ? { hold1: 500, hold2: 500, hold3: 500, hold4: 400 }
+      : {
+          hold1: 2600,
+          hold2: 2800,
+          hold3: 2800,
+          hold4: 2000
+        };
 
     const timers = [];
     let isSkipped = false;

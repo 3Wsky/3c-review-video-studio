@@ -2157,18 +2157,20 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   border-top: 1px solid var(--line);
 }
 
-/* ============ 道法起片过场动画 (Taoist Transition Animation) ============ */
+/* ============ 道法起片过场动画 — 黑白太极 · 古朴神秘 ============ */
 .tao-overlay {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background-color: #04040a;
-  background-image: radial-gradient(circle at 50% 50%, rgba(15, 10, 30, 0.95) 0%, #04040a 100%);
+  background-color: #020202;
+  background-image:
+    radial-gradient(ellipse 90% 70% at 50% 45%, rgba(28, 26, 22, 0.55) 0%, transparent 65%),
+    radial-gradient(circle at 50% 50%, #0a0a0a 0%, #020202 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ink);
-  font-family: var(--ds-font-sans, inherit);
+  color: #d8d2c6;
+  font-family: var(--ds-font-serif, "Noto Serif SC", "Songti SC", serif);
   overflow: hidden;
   transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -2189,10 +2191,11 @@ body.remotion-open { padding-right: min(440px, 42vw); }
 }
 
 .tao-taichi-svg {
-  width: min(600px, 80vw);
-  height: min(600px, 80vw);
-  animation: tao-spin 30s linear infinite;
-  filter: blur(1px) drop-shadow(0 0 30px rgba(177, 107, 255, 0.15));
+  width: min(520px, 72vw);
+  height: min(520px, 72vw);
+  animation: tao-spin 48s linear infinite;
+  filter: drop-shadow(0 0 40px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 12px rgba(200, 190, 170, 0.08));
+  opacity: 0.92;
 }
 
 @keyframes tao-spin {
@@ -2202,30 +2205,29 @@ body.remotion-open { padding-right: min(440px, 42vw); }
 
 .tao-glow-ring {
   position: absolute;
-  width: min(450px, 60vw);
-  height: min(450px, 60vw);
+  width: min(380px, 52vw);
+  height: min(380px, 52vw);
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(177, 107, 255, 0.08) 0%, transparent 70%);
-  animation: tao-pulse 4s ease-in-out infinite alternate;
+  background: radial-gradient(circle, rgba(168, 146, 104, 0.06) 0%, transparent 72%);
+  animation: tao-pulse 6s ease-in-out infinite alternate;
 }
 
 @keyframes tao-pulse {
-  0% { transform: scale(0.95); opacity: 0.6; }
-  100% { transform: scale(1.05); opacity: 1; }
+  0% { transform: scale(0.96); opacity: 0.45; }
+  100% { transform: scale(1.04); opacity: 0.85; }
 }
 
+.tao-ink-mist,
 .tao-sparkles {
   position: absolute;
   inset: 0;
-  background-image: 
-    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-    radial-gradient(circle at 75% 40%, rgba(177, 107, 255, 0.15) 1.5px, transparent 1.5px),
-    radial-gradient(circle at 40% 80%, rgba(255, 77, 157, 0.1) 1px, transparent 1px),
-    radial-gradient(circle at 10% 70%, rgba(111, 123, 255, 0.12) 2px, transparent 2px),
-    radial-gradient(circle at 90% 15%, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 100% 100%;
-  opacity: 0.8;
-  animation: tao-float 8s ease-in-out infinite alternate;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(ellipse 40% 30% at 18% 72%, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
+    radial-gradient(ellipse 35% 25% at 82% 28%, rgba(255, 255, 255, 0.025) 0%, transparent 70%),
+    radial-gradient(circle at 50% 100%, rgba(0, 0, 0, 0.35) 0%, transparent 55%);
+  animation: tao-float 10s ease-in-out infinite alternate;
 }
 
 @keyframes tao-float {
@@ -2251,27 +2253,24 @@ body.remotion-open { padding-right: min(440px, 42vw); }
 }
 
 .tao-title-main {
-  font-size: 28px;
-  font-weight: 800;
-  letter-spacing: 4px;
-  background: linear-gradient(135deg, #ff4d9d 0%, #b16bff 50%, #6f7bff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 40px rgba(177, 107, 255, 0.3);
-  animation: tao-glow-text 3s ease-in-out infinite alternate;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 6px;
+  color: #d4cfc4;
+  text-shadow: 0 0 24px rgba(168, 146, 104, 0.25);
+  animation: tao-glow-text 5s ease-in-out infinite alternate;
 }
 
 @keyframes tao-glow-text {
-  0% { filter: drop-shadow(0 0 10px rgba(177, 107, 255, 0.2)); }
-  100% { filter: drop-shadow(0 0 25px rgba(177, 107, 255, 0.5)); }
+  0% { opacity: 0.82; filter: drop-shadow(0 0 8px rgba(168, 146, 104, 0.15)); }
+  100% { opacity: 1; filter: drop-shadow(0 0 18px rgba(168, 146, 104, 0.35)); }
 }
 
 .tao-subtitle {
-  font-size: 16px;
-  color: #fbbf24; /* Gold color for mysterious vibe */
-  font-weight: 600;
-  letter-spacing: 1px;
+  font-size: 15px;
+  color: #a89268;
+  font-weight: 500;
+  letter-spacing: 2px;
   min-height: 24px;
   transition: all 0.5s ease;
 }
@@ -2294,10 +2293,10 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   gap: 10px;
   width: min(240px, 78vw);
   padding: 20px 18px;
-  background: rgba(15, 15, 25, 0.88);
-  border: 1px solid rgba(177, 107, 255, 0.22);
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(177, 107, 255, 0.08);
+  background: rgba(8, 8, 10, 0.9);
+  border: 1px solid rgba(168, 146, 104, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.55);
   pointer-events: none;
@@ -2322,15 +2321,15 @@ body.remotion-open { padding-right: min(440px, 42vw); }
 .tao-stage-container[data-phase="1"] .tao-main-node {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
-  border-color: var(--ds-accent);
-  box-shadow: 0 15px 40px rgba(177, 107, 255, 0.25), inset 0 0 18px rgba(177, 107, 255, 0.12);
+  border-color: rgba(200, 190, 170, 0.45);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), inset 0 0 18px rgba(168, 146, 104, 0.08);
 }
 
 /* 一生二：壹上移淡出，阴阳自中心裂向两侧 */
 .tao-stage-container[data-phase="2"] .tao-main-node {
   opacity: 0.35;
   transform: translate(-50%, calc(-50% - 72px)) scale(0.72);
-  border-color: rgba(177, 107, 255, 0.12);
+  border-color: rgba(168, 146, 104, 0.12);
 }
 
 .tao-stage-container[data-phase="2"] .tao-node-left {
@@ -2371,11 +2370,11 @@ body.remotion-open { padding-right: min(440px, 42vw); }
 .tao-stage-container[data-phase="4"] .tao-node-left,
 .tao-stage-container[data-phase="4"] .tao-node-right,
 .tao-stage-container[data-phase="4"] .tao-node-bottom {
-  border-color: rgba(251, 191, 36, 0.55);
+  border-color: rgba(168, 146, 104, 0.55);
   box-shadow:
-    0 0 28px rgba(251, 191, 36, 0.22),
+    0 0 28px rgba(168, 146, 104, 0.18),
     0 12px 36px rgba(0, 0, 0, 0.45),
-    inset 0 0 18px rgba(177, 107, 255, 0.15);
+    inset 0 0 18px rgba(255, 255, 255, 0.04);
   animation: tao-triad-glow 1.6s ease-in-out infinite alternate;
 }
 
@@ -2393,7 +2392,7 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   width: 280px;
   height: 180px;
   border-radius: 20px;
-  border: 2px solid var(--ds-accent);
+  border: 2px solid rgba(168, 146, 104, 0.45);
   opacity: 0;
   animation: tao-node-glow-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
@@ -2416,25 +2415,26 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--ds-accent-grad);
-  color: #fff;
+  background: linear-gradient(145deg, #2a2824 0%, #0e0e10 100%);
+  color: #e8e4d8;
+  border: 1px solid rgba(168, 146, 104, 0.4);
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 700;
   display: grid;
   place-items: center;
-  box-shadow: 0 0 20px rgba(177, 107, 255, 0.5);
+  box-shadow: 0 0 16px rgba(0, 0, 0, 0.6);
 }
 
 .tao-node-title {
   font-size: 16px;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 600;
+  color: #d8d2c6;
   letter-spacing: 1px;
 }
 
 .tao-node-desc {
   font-size: 12.5px;
-  color: var(--muted);
+  color: rgba(168, 160, 148, 0.85);
   line-height: 1.5;
 }
 
