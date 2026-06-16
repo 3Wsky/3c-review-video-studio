@@ -453,6 +453,19 @@ function dateKey() {
 
 // ---------- HTTP 服务 ----------
 
+// 生产站浏览器直连 worker，绕过 Cloudflare Pages Function ~30s 超时。
+const CORS_ALLOWED = /^https:\/\/([a-z0-9-]+\.)*pages\.dev$/i;
+
+function applyCors(req, res) {
+  const origin = req.headers.origin || "";
+  if (CORS_ALLOWED.test(origin) || /^http:\/\/localhost(:\d+)?$/i.test(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "content-type");
+    res.setHeader("Vary", "Origin");
+  }
+}
+
 function sendJson(res, status, body) {
   const data = JSON.stringify(body);
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -478,6 +491,11 @@ function readBody(req, limit = 64 * 1024 * 1024) {
 }
 
 const server = createServer(async (req, res) => {
+  applyCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    return res.end();
+  }
   if (req.method === "GET" && req.url === "/health") {
     return sendJson(res, 200, {
       ok: true,

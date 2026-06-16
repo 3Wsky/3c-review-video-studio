@@ -1631,6 +1631,38 @@ function exportShotlist() {
 }
 
 /* ---- 渲染视频：把当前 Timeline 发到渲染 worker（RENDER_URL），出片 MP4 ---- */
+
+/** 浏览器直连 render.1go.im，避免 CF Pages Function 30s 超时截断长渲染 */
+let cachedRenderDirectUrl = "";
+
+async function resolveRenderEndpoint(apiBase) {
+  if (cachedRenderDirectUrl) return `${cachedRenderDirectUrl}/render`;
+  try {
+    const res = await fetch(`${apiBase}/api/health`);
+    const data = await res.json();
+    const direct = String(data.renderDirectUrl || "").trim().replace(/\/$/, "");
+    if (direct && /^https:\/\//i.test(direct)) {
+      cachedRenderDirectUrl = direct;
+      return `${direct}/render`;
+    }
+  } catch (e) {
+    console.warn("resolveRenderEndpoint", e);
+  }
+  return `${apiBase}/api/render`;
+}
+
+async function postRenderRequest(apiBase, body) {
+  const endpoint = await resolveRenderEndpoint(apiBase);
+  const viaDirect = !endpoint.includes("/api/render");
+  if (viaDirect) {
+    setCueHint("正在直连渲染节点出片（约 2–3 分钟），请勿关闭页面…");
+  }
+  return fetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+}
 let lastRenderUrl = "";
 
 function setRenderBtn(label, busy) {
@@ -1711,11 +1743,7 @@ async function performRender(data, apiBase, voice) {
   }
 
   try {
-    const response = await fetch(`${apiBase}/api/render`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body)
-    });
+    const response = await postRenderRequest(apiBase, body);
     const type = response.headers.get("content-type") || "";
     if (type.includes("application/json")) {
       const payload = await response.json().catch(() => ({}));
@@ -1738,8 +1766,9 @@ async function performRender(data, apiBase, voice) {
       } else if (response.status === 502 || response.status === 530) {
         message =
           "渲染隧道离线（5060/WSL 可能休眠或 cloudflared 已退出）。请唤醒 WSL，运行 scripts/cloudflared-watchdog.sh 或 systemctl restart 3c-cloudflared-tunnel 后重试。";
-      } else if (response.status === 524) {
-        message = "渲染超时：分镜较多时出片需 2–3 分钟，请减少分镜后重试，或稍后重试。";
+      } else if (response.status === 524 || (response.status === 502 && !cachedRenderDirectUrl)) {
+        message =
+          "渲染超时：分镜较多时出片需 2–3 分钟。请硬刷新页面后重试（将直连渲染节点）；或减少分镜数。";
       }
       setCueHint(message);
       setRenderBtn("渲染视频", false);

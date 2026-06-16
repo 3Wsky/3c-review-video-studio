@@ -25,6 +25,7 @@ export async function onRequestGet(context) {
     ok: true,
     service: "3c-review-video-studio",
     probes,
+    renderDirectUrl: (env.RENDER_PUBLIC_URL || renderUrl || "").replace(/\/$/, ""),
     timestamp: new Date().toISOString()
   });
 }
