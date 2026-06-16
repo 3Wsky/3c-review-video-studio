@@ -31,17 +31,52 @@ function saveJobs(jobs) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ jobs }));
 }
 
-export function buildAgnesPrompt({ product, category, headline, userPrompt }) {
+export function buildAgnesPrompt({
+  product,
+  category,
+  headline,
+  detail,
+  voiceover,
+  visualType,
+  sceneTitle,
+  userPrompt
+}) {
+  const sceneSummary = buildSceneSummary({ voiceover, detail, headline, sceneTitle });
+  const illustrating = sceneSummary
+    ? `b-roll illustrating: ${sceneSummary}`
+    : "cinematic product showcase";
+  const peopleClause =
+    visualType && /拍摄|真人|口播|shootGuide/i.test(String(visualType))
+      ? ""
+      : ", no people unless shootGuide";
+
   const bits = [
     product || "3C product",
     category || "",
-    "product b-roll",
-    userPrompt || headline || "cinematic product showcase",
-    "cinematic lighting",
-    "9:16 vertical",
-    "no text"
+    illustrating,
+    headline ? String(headline).trim() : "",
+    "cinematic 9:16 vertical",
+    "no text" + peopleClause,
+    userPrompt ? String(userPrompt).trim() : ""
   ].filter(Boolean);
+
   return bits.join(", ");
+}
+
+/** 口播/详情优先，供 Agnes 生成与当前镜语义一致的空镜 */
+function buildSceneSummary({ voiceover, detail, headline, sceneTitle }) {
+  const vo = String(voiceover || "").trim();
+  const det = String(detail || "").trim();
+  if (vo) return vo.slice(0, 160);
+  if (det) return det.slice(0, 160);
+  const hl = String(headline || "").trim();
+  if (hl) return hl.slice(0, 120);
+  return String(sceneTitle || "").trim().slice(0, 80);
+}
+
+/** @param {Parameters<typeof buildAgnesPrompt>[0]} input */
+export function previewAgnesPrompt(input) {
+  return buildAgnesPrompt(input);
 }
 
 export async function createAgnesTask({ prompt, imageUrl, durationSec = 5, format = "9:16" }) {

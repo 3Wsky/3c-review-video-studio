@@ -7,6 +7,7 @@ import {
   cancelAgnesJob,
   enqueueAgnesBroll,
   loadJobs,
+  previewAgnesPrompt,
   resumeAgnesJobs
 } from "./agnes-broll.js";
 
@@ -53,6 +54,23 @@ export default function AgnesBrollPanel() {
     return img?.url?.startsWith("http") ? img.url : undefined;
   }, [assets]);
 
+  const promptPreview = useMemo(
+    () =>
+      scene
+        ? previewAgnesPrompt({
+            product,
+            category,
+            headline: scene.visual?.headline,
+            detail: scene.visual?.detail,
+            voiceover: scene.voiceover || scene.subtitle,
+            visualType: scene.visual?.type,
+            sceneTitle: scene.title,
+            userPrompt: scene.visual?.broll?.query
+          })
+        : "",
+    [scene, product, category]
+  );
+
   const handleGenerate = async () => {
     if (!scene || busy) return;
     setLoading(true);
@@ -61,6 +79,10 @@ export default function AgnesBrollPanel() {
         product,
         category,
         headline: scene.visual?.headline,
+        detail: scene.visual?.detail,
+        voiceover: scene.voiceover || scene.subtitle,
+        visualType: scene.visual?.type,
+        sceneTitle: scene.title,
         userPrompt: scene.visual?.broll?.query
       });
 
@@ -113,8 +135,13 @@ export default function AgnesBrollPanel() {
         {statusLabel ? <span class="agnes-broll-panel__status">{statusLabel}</span> : null}
       </div>
       <p class="ce-metric-hint">
-        为当前镜异步生成 5s 竖屏 B-roll，完成后自动填入画面素材。免费期可能排队较久，可刷新页面后续轮询。
+        将基于<strong>当前镜口播</strong>生成 5s 竖屏 B-roll，完成后自动填入画面素材。免费期可能排队较久，可刷新页面后续轮询。
       </p>
+      {promptPreview ? (
+        <p class="agnes-broll-panel__prompt-preview" title={promptPreview}>
+          Prompt 预览：{promptPreview.length > 96 ? `${promptPreview.slice(0, 96)}…` : promptPreview}
+        </p>
+      ) : null}
       <div class="agnes-broll-panel__actions">
         <Button
           type="button"
