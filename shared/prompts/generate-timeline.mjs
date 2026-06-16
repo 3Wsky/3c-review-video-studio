@@ -310,7 +310,7 @@ export function normalizeTimelineResponse(data, input) {
     };
   });
 
-  return {
+  const result = {
     project: {
       product: data.project?.product || input.productName || "",
       category: data.project?.category || input.category || "",
