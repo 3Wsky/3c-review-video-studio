@@ -1693,8 +1693,11 @@ async function performRender(data, apiBase, voice) {
       let message = payload.error || "渲染失败";
       if (response.status === 501) {
         message = "渲染服务未配置：请在后端设置 RENDER_URL 指向你的渲染 worker（见 video-render/README）。";
-      } else if (response.status === 502) {
-        message = `连不上渲染服务，GPU 机可能没开机：${message}`;
+      } else if (response.status === 502 || response.status === 530) {
+        message =
+          "渲染隧道离线（5060/WSL 可能休眠或 cloudflared 已退出）。请唤醒 WSL，运行 scripts/cloudflared-watchdog.sh 或 systemctl restart 3c-cloudflared-tunnel 后重试。";
+      } else if (response.status === 524) {
+        message = "渲染超时：分镜较多时出片需 2–3 分钟，请减少分镜后重试，或稍后重试。";
       }
       setCueHint(message);
       setRenderBtn("渲染视频", false);

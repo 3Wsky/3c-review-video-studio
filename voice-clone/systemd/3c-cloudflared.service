@@ -5,9 +5,10 @@ After=network.target 3c-voice-clone.service
 [Service]
 Type=simple
 User=administrator
-ExecStart=/usr/local/bin/cloudflared tunnel run 3c-worker
-Restart=on-failure
-RestartSec=10
+# QUIC 比 http2 更稳；连接全断时 cloudflared 会以 0 退出，必须 Restart=always
+ExecStart=/usr/local/bin/cloudflared tunnel --protocol quic run 3c-worker
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

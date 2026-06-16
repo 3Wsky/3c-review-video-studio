@@ -57,16 +57,47 @@ app.add_middleware(
 
 # 延迟加载，避免没装好依赖时 import 就崩
 _model = None
+_model_loading = False
+_model_load_error: str | None = None
 
 
 def get_model():
-    global _model
+    global _model, _model_loading, _model_load_error
     if _model is None:
-        from cosyvoice.cli.cosyvoice import AutoModel
+        _model_loading = True
+        _model_load_error = None
+        try:
+            from cosyvoice.cli.cosyvoice import AutoModel
 
-        _model = AutoModel(model_dir=MODEL_DIR)
-        _restore_speakers(_model)
+            _model = AutoModel(model_dir=MODEL_DIR)
+            _restore_speakers(_model)
+        except Exception as error:  # noqa: BLE001
+            _model_load_error = str(error)
+            raise
+        finally:
+            _model_loading = False
     return _model
+
+
+def _preload_model() -> None:
+    """后台预加载模型，让 /health 能反映真实就绪状态。"""
+    import threading
+
+    def _load() -> None:
+        try:
+            print("[voice-clone] preloading model...", flush=True)
+            get_model()
+            print("[voice-clone] model ready", flush=True)
+        except Exception as error:  # noqa: BLE001
+            print(f"[voice-clone] preload failed: {error}", flush=True)
+
+    threading.Thread(target=_load, daemon=True, name="model-preload").start()
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    if os.environ.get("PRELOAD_MODEL", "1").strip().lower() not in ("0", "false", "no"):
+        _preload_model()
 
 
 def _load_registry() -> dict:
@@ -123,12 +154,24 @@ class TtsInput(BaseModel):
 def health():
     registry = _load_registry()
     return {
-        "ok": True,
+        "ok": _model_load_error is None,
         "modelDir": MODEL_DIR,
         "modelLoaded": _model is not None,
+        "modelLoading": _model_loading,
+        "modelLoadError": _model_load_error,
         "cuda": torch.cuda.is_available(),
         "speakers": list(registry.keys()),
     }
+
+
+@app.post("/warmup")
+def warmup():
+    """显式触发模型加载（运维探针 / 首次部署后预热）。"""
+    try:
+        get_model()
+    except Exception as error:  # noqa: BLE001
+        return JSONResponse({"error": str(error), "modelLoaded": False}, status_code=503)
+    return {"modelLoaded": True, "speakers": list(_load_registry().keys())}
 
 
 @app.get("/speakers")

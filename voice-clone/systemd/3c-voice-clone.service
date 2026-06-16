@@ -9,8 +9,11 @@ WorkingDirectory=/mnt/f/3c-review-video-studio/voice-clone
 Environment=COSYVOICE_DIR=/mnt/f/3c-review-video-studio/voice-clone/CosyVoice
 Environment=MODEL_DIR=/mnt/f/3c-review-video-studio/voice-clone/CosyVoice/pretrained_models/CosyVoice2-0.5B
 Environment=PORT=9233
+Environment=PRELOAD_MODEL=1
+# 启动前释放被旧手动进程占用的端口，避免 address already in use 循环重启
+ExecStartPre=-/usr/bin/fuser -k 9233/tcp
 ExecStart=/mnt/f/3c-review-video-studio/voice-clone/.venv/bin/python /mnt/f/3c-review-video-studio/voice-clone/server.py
-Restart=on-failure
+Restart=always
 RestartSec=10
 
 [Install]

@@ -78,7 +78,11 @@ export async function onRequestPost(context) {
     );
   }
   if (!resp.ok) {
-    return jsonResponse({ error: "渲染失败", providerStatus: resp.status }, resp.status);
+    const hint =
+      resp.status === 502 || resp.status === 530
+        ? "渲染隧道离线（5060/WSL 休眠或 cloudflared 退出）"
+        : "渲染失败";
+    return jsonResponse({ error: hint, providerStatus: resp.status }, resp.status >= 500 ? 502 : resp.status);
   }
 
   return new Response(resp.body, {

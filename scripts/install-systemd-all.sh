@@ -44,4 +44,7 @@ curl -sf "http://localhost:9234/health" | head -c 200 || echo "render :9234 未�
 echo ""
 curl -sf "http://localhost:9233/health" | head -c 200 || echo "voice :9233 未就绪"
 echo ""
+echo "提示：若外网 1033，可前台运行看门狗："
+echo "  bash $ROOT/scripts/cloudflared-watchdog.sh"
+echo ""
 echo "完成。日志: journalctl -u 3c-render-worker -f"
