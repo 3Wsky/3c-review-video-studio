@@ -1,4 +1,11 @@
-import { sanitizeDataviz, sanitizeTransition, sanitizeRadar } from "../dataviz/geometry.mjs";
+import {
+  sanitizeCompare,
+  sanitizeDataviz,
+  sanitizeMetric,
+  sanitizeRadar,
+  sanitizeShootGuide,
+  sanitizeTransition
+} from "../dataviz/geometry.mjs";
 
 /** @param {string} value @param {number} maxLength */
 export function clampText(value, maxLength) {
@@ -30,7 +37,20 @@ export function buildGenerateTimelinePrompt(input) {
 8. 每个分镜的 title 用节奏标签标出它在留人结构里的角色：第 1 个固定为"前5秒·钩子"，后续依次用"痛点共鸣""悬念展开""高潮·揭晓""反转·短板""结尾·结论+互动"之类（按实际镜数取舍）。
 9. 输出必须是严格 JSON，不要 markdown，不要代码块，不要解释。
 10. 数据图表（可选，仅在有真实数字时）：若「产品事实」里有 2 个以上可对比的真实数值参数（如多场景续航小时数、不同模式重量/价格/跑分），可给最适合的 1-2 个分镜的 visual 追加 "dataviz" 字段，渲成动画图表：{"kind":"bar","title":"实测续航","unit":"小时","items":[{"label":"轻度使用","value":14},{"label":"重度使用","value":8}]}。kind 选择：同单位多项对比用 "bar"；单项对上限的占比用 "ring"（item 可带 "max"）；3-6 个维度的综合表现用 "radar"（每项必须带 "max" 作满分）。数字必须逐字来自「产品事实」，绝不允许编造、推算或从评测素材里抄其它产品的数；「产品事实」没有足够数字就完全不输出 dataviz 字段。
-11. 镜头转场（可选）：每镜 visual 可带 "transition": {"in": "speed-line"} 标注入场动效，可选 "speed-line"（疾速白线，适合钩子/高潮/节奏加速处）或 "scan-wipe"（科技扫描线，适合悬念展开/参数揭晓处）。按情绪曲线制造感官切换，高潮与反转处优先，不必每镜都加。
+11. 镜头转场（强烈建议）：按情绪曲线为分镜标注入场动效 visual.transition.in，从转场库选：speed-line（钩子/高潮加速）、scan-wipe（悬念/揭晓）、glitch-cut（反转冲击）、pixel-dissolve（过渡）、screen-crack（反转 Beat）、iris-close（结尾收束）。钩子镜必带 speed-line，结尾镜建议 scan-wipe 或 iris-close。
+12. 游戏化视觉（必须 · 全片至少 3 种不同组件）：PreviewStage 已支持擂台 PK / 拍摄 HUD / 属性环 Stat Ring / 雷达 HUD / 数据图表。你必须按分镜 title 的节奏标签分配 visual 字段（数字优先来自「产品事实」；若无硬数字，可用 0-100 的编辑化主观分，基于 insights 优缺点，禁止编造具体参数/价格/跑分）：
+    - 第 1 镜「前5秒·钩子」→ transition.in="speed-line"
+    - 「痛点共鸣」镜 → shootGuide（教用户拍痛点特写）或 dataviz.kind="bar"（有真实对比数时）
+    - 「悬念展开」镜 → radar（3-5 维 dims，每维 value 0-100）或 dataviz.kind="radar"；transition.in="scan-wipe"
+    - 「高潮·揭晓」镜 → compare.style="arena"（擂台 PK：products=[「${input.productName || "本产品"}」,「同价位参考」]，rows 至少 2 行含可解析数值 a/b 或 values）；type 可写「擂台对决」
+    - 「反转·短板」镜 → metric（value+max 短板指数）+ radar.dims（四角属性节点，与 metric 同镜）；transition.in="glitch-cut" 或 "screen-crack"
+    - 「结尾·结论+互动」镜 → transition.in="scan-wipe" 或 "iris-close"；可选 dataviz.kind="ring"
+    示例（高潮镜 compare）：
+    "compare": {"style":"arena","products":["${input.productName || "本产品"}","同价位参考"],"rows":[{"dim":"综合体验","a":82,"b":74,"unit":"分","better":"high"},{"dim":"续航表现","a":16,"b":12,"unit":"小时","better":"high"}]}
+    示例（悬念镜 radar）：
+    "radar": {"dims":[{"label":"性能","value":88,"max":100},{"label":"续航","value":72,"max":100},{"label":"影像","value":85,"max":100},{"label":"手感","value":78,"max":100}]}
+    示例（痛点镜 shootGuide）：
+    "shootGuide": {"variant":"product_macro","title":"拍一张痛点特写","steps":["对准问题部位","稳住2秒","自然光更佳"],"angle":"45°俯拍"}
 
 输出结构：
 {
@@ -88,6 +108,117 @@ ${clampText(input.facts, 2500)}
 ${clampText(input.reviews, 4500)}`;
 }
 
+/** @param {string} title */
+function roleFromTitle(title) {
+  const t = String(title || "");
+  if (/钩子/.test(t)) return "hook";
+  if (/痛点/.test(t)) return "pain";
+  if (/悬念/.test(t)) return "suspense";
+  if (/高潮|揭晓/.test(t)) return "climax";
+  if (/反转|短板/.test(t)) return "twist";
+  if (/结尾|结论|互动/.test(t)) return "ending";
+  return "middle";
+}
+
+/** @param {Record<string, unknown>} insights @param {boolean} [lowBias] */
+function radarFromInsights(insights, lowBias = false) {
+  const pros = (Array.isArray(insights?.pros) ? insights.pros : []).slice(0, 3);
+  const cons = (Array.isArray(insights?.cons) ? insights.cons : []).slice(0, 2);
+  const labels = [
+    ...pros.map((p) => String(p).slice(0, 6)),
+    ...cons.map((c) => String(c).slice(0, 6))
+  ].filter(Boolean);
+  const dims = (labels.length >= 3 ? labels : ["性能", "续航", "影像", "手感"]).slice(0, 5).map((label, i) => ({
+    label,
+    value: lowBias && i >= pros.length ? 42 + (i % 3) * 8 : 68 + (i % 4) * 7,
+    max: 100
+  }));
+  return { dims };
+}
+
+/** @param {string} productName @param {Record<string, unknown>} insights */
+function fallbackArenaCompare(productName, insights) {
+  const pros = (Array.isArray(insights?.pros) ? insights.pros : []).slice(0, 2);
+  const cons = (Array.isArray(insights?.cons) ? insights.cons : []).slice(0, 1);
+  const rows = [
+    {
+      dim: pros[0] ? String(pros[0]).slice(0, 8) : "综合体验",
+      a: 82,
+      b: 74,
+      unit: "分",
+      better: "high"
+    },
+    {
+      dim: pros[1] ? String(pros[1]).slice(0, 8) : cons[0] ? String(cons[0]).slice(0, 8) : "关键指标",
+      a: 78,
+      b: 70,
+      unit: "分",
+      better: "high"
+    }
+  ];
+  return {
+    style: "arena",
+    products: [productName || "本产品", "同价位参考"],
+    rows
+  };
+}
+
+/**
+ * LLM 漏标游戏化字段时，按节奏标签兜底注入（保证预览至少 2-3 种组件）。
+ * @param {Record<string, unknown>} scene
+ * @param {Record<string, unknown>} ctx
+ */
+function ensureGamifiedVisual(scene, ctx) {
+  const role = roleFromTitle(scene.title);
+  const visual = { ...(/** @type {Record<string, unknown>} */ (scene.visual) || {}) };
+  const productName = ctx.productName || "本产品";
+  const insights = /** @type {Record<string, unknown>} */ (ctx.insights) || {};
+
+  const hasGame =
+    visual.compare ||
+    visual.shootGuide ||
+    visual.metric ||
+    visual.radar ||
+    visual.dataviz;
+
+  if (role === "hook" && !visual.transition) {
+    visual.transition = { in: "speed-line" };
+  }
+  if (role === "pain" && !visual.shootGuide && !visual.dataviz) {
+    visual.shootGuide = {
+      variant: "product_macro",
+      title: "拍一张痛点特写",
+      steps: ["对准问题部位", "稳住 2 秒", "自然光更佳"],
+      angle: "45°俯拍"
+    };
+  }
+  if (role === "suspense" && !visual.radar && !visual.dataviz) {
+    visual.radar = radarFromInsights(insights);
+    if (!visual.transition) visual.transition = { in: "scan-wipe" };
+  }
+  if (role === "climax" && !visual.compare) {
+    visual.compare = fallbackArenaCompare(productName, insights);
+    visual.type = visual.type || "擂台对决";
+  }
+  if (role === "twist" && !visual.metric) {
+    visual.metric = { label: "短板指数", value: 38, max: 100, better: "low" };
+    if (!visual.radar) visual.radar = radarFromInsights(insights, true);
+    if (!visual.transition) visual.transition = { in: "glitch-cut" };
+  }
+  if (role === "ending" && !visual.transition) {
+    visual.transition = { in: "iris-close" };
+  }
+
+  // 全片兜底：若仍无任何游戏化组件且是中段镜，补 radar
+  if (!hasGame && !visual.compare && !visual.shootGuide && !visual.metric && !visual.radar && !visual.dataviz) {
+    if (role === "middle" || role === "suspense") {
+      visual.radar = radarFromInsights(insights);
+    }
+  }
+
+  return { ...scene, visual };
+}
+
 /** @param {string} content */
 export function stripJsonFence(content) {
   return String(content || "")
@@ -106,7 +237,13 @@ export function normalizeTimelineResponse(data, input) {
 
   const sceneDuration = targetDuration / timeline.length;
   let cursor = 0;
-  const normalized = timeline.map((scene, index) => {
+  const enriched = timeline.map((scene) =>
+    ensureGamifiedVisual(scene, {
+      productName: data.project?.product || input.productName || "",
+      insights: data.insights || {}
+    })
+  );
+  const normalized = enriched.map((scene, index) => {
     const isLast = index === timeline.length - 1;
     const start = Number.isFinite(Number(scene.start)) ? Number(scene.start) : cursor;
     const end = isLast
@@ -120,6 +257,9 @@ export function normalizeTimelineResponse(data, input) {
     const dataviz = sanitizeDataviz(scene.visual?.dataviz);
     const transition = sanitizeTransition(scene.visual?.transition);
     const radar = sanitizeRadar(scene.visual?.radar);
+    const metric = sanitizeMetric(scene.visual?.metric);
+    const compare = sanitizeCompare(scene.visual?.compare);
+    const shootGuide = sanitizeShootGuide(scene.visual?.shootGuide);
     return {
       id: scene.id || `scene_${String(index + 1).padStart(2, "0")}`,
       index: index + 1,
@@ -135,6 +275,9 @@ export function normalizeTimelineResponse(data, input) {
         headline: scene.visual?.headline || scene.title || "核心观点",
         detail: scene.visual?.detail || "根据输入素材生成",
         asset: scene.visual?.asset || "uploaded_product_asset",
+        ...(metric ? { metric } : {}),
+        ...(compare ? { compare } : {}),
+        ...(shootGuide ? { shootGuide } : {}),
         ...(dataviz ? { dataviz } : {}),
         ...(transition ? { transition } : {}),
         ...(radar ? { radar } : {})

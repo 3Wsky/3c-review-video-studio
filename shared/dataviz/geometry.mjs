@@ -237,6 +237,82 @@ export function sanitizeTransition(raw) {
   return { ...(tin ? { in: tin } : {}), ...(tout ? { out: tout } : {}) };
 }
 
+// 单指标卡（visual.metric）存储形校验：value 必须可解析为数值。
+export function sanitizeMetric(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = toNumber(raw.value);
+  if (!Number.isFinite(value)) return null;
+  const min = toNumber(raw.min);
+  const max = toNumber(raw.max);
+  return {
+    value,
+    unit: String(raw.unit || "").trim(),
+    label: String(raw.label || "").trim(),
+    caption: String(raw.caption || "").trim(),
+    ...(Number.isFinite(min) ? { min } : {}),
+    ...(Number.isFinite(max) && max > (Number.isFinite(min) ? min : 0) ? { max } : {}),
+    better: raw.better === "low" ? "low" : "high"
+  };
+}
+
+// 横评/擂台（visual.compare）存储形校验：≥2 产品、≥1 有效对比行。
+export function sanitizeCompare(raw) {
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.rows)) return null;
+  const products = (Array.isArray(raw.products) ? raw.products : [])
+    .map((p) => String(p == null ? "" : p).trim())
+    .filter(Boolean);
+  const nameA = products[0] || "本品";
+  const nameB = products[1] || "同价位参考";
+  const rows = raw.rows
+    .map((row) => {
+      const label = String(row?.dim || row?.label || "").trim();
+      if (!label) return null;
+      const better = row?.better === "low" ? "low" : "high";
+      const unit = String(row?.unit || "").trim();
+      if (row?.a != null && row?.b != null) {
+        const a = toNumber(row.a);
+        const b = toNumber(row.b);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+        return { dim: label, a, b, unit, better };
+      }
+      const values = (Array.isArray(row?.values) ? row.values : []).slice(0, 2);
+      const a = toNumber(values[0]);
+      const b = toNumber(values[1]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      return { label, unit, better, values: [String(values[0]).trim(), String(values[1]).trim()] };
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!rows.length) return null;
+  const style = raw.style === "arena" ? "arena" : raw.style === "table" ? "table" : "arena";
+  return {
+    style,
+    products: products.length >= 2 ? products.slice(0, 4) : [nameA, nameB],
+    rows
+  };
+}
+
+const SHOOT_VARIANTS = ["product_macro", "hand_hold", "comparison", "talking_head"];
+
+// 拍摄引导 HUD（visual.shootGuide）存储形校验。
+export function sanitizeShootGuide(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const title = String(raw.title || "").trim();
+  const steps = (Array.isArray(raw.steps) ? raw.steps : Array.isArray(raw.tips) ? raw.tips : [])
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!title && steps.length === 0) return null;
+  const variant = SHOOT_VARIANTS.includes(raw.variant) ? raw.variant : "product_macro";
+  return {
+    variant,
+    title: title || "拍摄引导",
+    steps,
+    angle: String(raw.angle || "").trim(),
+    safeArea: String(raw.safeArea || "").trim()
+  };
+}
+
 // 属性维度（visual.radar = { dims: [{label,value,max?}] }）存储形校验：≥3 维有效才保留。
 export function sanitizeRadar(raw) {
   if (!raw || typeof raw !== "object" || !Array.isArray(raw.dims)) return null;
