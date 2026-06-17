@@ -454,21 +454,33 @@ function dateKey() {
 // ---------- HTTP 服务 ----------
 
 // 生产站浏览器直连 worker，绕过 Cloudflare Pages Function ~30s 超时。
-const CORS_ALLOWED = /^https:\/\/([a-z0-9-]+\.)*pages\.dev$/i;
+const CORS_ALLOWED =
+  /^https:\/\/([a-z0-9-]+\.)*pages\.dev$/i;
 
-function applyCors(req, res) {
+function corsHeaders(req) {
   const origin = req.headers.origin || "";
-  if (CORS_ALLOWED.test(origin) || /^http:\/\/localhost(:\d+)?$/i.test(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "content-type");
-    res.setHeader("Vary", "Origin");
-  }
+  const ok =
+    CORS_ALLOWED.test(origin) || /^http:\/\/localhost(:\d+)?$/i.test(origin);
+  if (!ok) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "content-type",
+    Vary: "Origin",
+  };
 }
 
-function sendJson(res, status, body) {
+function applyCors(req, res) {
+  const h = corsHeaders(req);
+  for (const [k, v] of Object.entries(h)) res.setHeader(k, v);
+}
+
+function sendJson(res, status, body, req) {
   const data = JSON.stringify(body);
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    ...(req ? corsHeaders(req) : {}),
+  });
   res.end(data);
 }
 
@@ -493,7 +505,7 @@ function readBody(req, limit = 64 * 1024 * 1024) {
 const server = createServer(async (req, res) => {
   applyCors(req, res);
   if (req.method === "OPTIONS") {
-    res.writeHead(204);
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
   if (req.method === "GET" && req.url === "/health") {
@@ -507,7 +519,7 @@ const server = createServer(async (req, res) => {
       hyperframes: HF,
       // 可用渲染引擎：hyperframes 始终在；remotion 需在 video-render/remotion 装好依赖。
       engines: ["hyperframes", ...(existsSync(join(__dirname, "remotion", "node_modules")) ? ["remotion"] : [])],
-    });
+    }, req);
   }
   if (req.method === "POST" && req.url === "/render") {
     try {
@@ -536,7 +548,7 @@ const server = createServer(async (req, res) => {
             public: uploaded.public,
             bytes: mp4.length,
             logs,
-          });
+          }, req);
         } catch (e) {
           log(`R2 上传失败，回退为直接下载：${e.message}`);
         }
@@ -546,11 +558,12 @@ const server = createServer(async (req, res) => {
         "content-type": "video/mp4",
         "content-length": mp4.length,
         "content-disposition": 'attachment; filename="render.mp4"',
+        ...corsHeaders(req),
       });
       return res.end(mp4);
     } catch (error) {
       console.error("[render] 失败:", error);
-      return sendJson(res, 500, { error: error.message || "渲染失败" });
+      return sendJson(res, 500, { error: error.message || "渲染失败" }, req);
     }
   }
   // 多端裁剪：封面图 + 小红书图文版（抽静帧 + 文案，不出视频）
@@ -591,17 +604,13 @@ const server = createServer(async (req, res) => {
         caption, // { title, body, tags, text }
         hosted: Boolean(r2cfg),
         logs,
-      });
+      }, req);
     } catch (error) {
       console.error("[poster] 失败:", error);
-      return sendJson(res, 500, { error: error.message || "图文导出失败" });
+      return sendJson(res, 500, { error: error.message || "图文导出失败" }, req);
     }
   }
-  if (req.method === "OPTIONS") {
-    res.writeHead(204, { allow: "POST, GET, OPTIONS" });
-    return res.end();
-  }
-  return sendJson(res, 404, { error: "Not found" });
+  return sendJson(res, 404, { error: "Not found" }, req);
 });
 
 server.listen(PORT, () => {
