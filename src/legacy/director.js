@@ -1,3 +1,9 @@
+import {
+  scrubTimelineCategoryMismatch,
+  resolveCategory,
+  hasCategoryConflict
+} from "../../shared/category-sanitize.mjs";
+
 const initialState = {
   layout: "center",
   currentScene: 0,
@@ -200,6 +206,17 @@ function extractInsights(reviewText, factsText) {
   };
 }
 
+function defaultVideoPromptForScene(title, product) {
+  const p = product || "产品";
+  if (/钩子/.test(title)) return `${p}正面特写从暗处推入，科技轮廓光，竖屏快切留悬念`;
+  if (/痛点/.test(title)) return `用户操作${p}时皱眉侧面剪影，冷色环境光，镜头轻微晃动`;
+  if (/悬念/.test(title)) return `${p}关键部位悬念微距，缓慢推近，暗背景一束顶光`;
+  if (/高潮|揭晓/.test(title)) return `${p}核心卖点部位环绕特写，暖色高光扫过边框`;
+  if (/反转|短板/.test(title)) return `${p}短板部位诚实微距展示，中性光线`;
+  if (/结尾/.test(title)) return `${p}英雄构图定格，干净暗背景，光圈收束感`;
+  return `${p}日常使用场景空镜，自然光，电影感竖屏`;
+}
+
 function buildScenes() {
   const product = els.productName.value.trim() || "这款产品";
   const category = els.category.value;
@@ -212,6 +229,7 @@ function buildScenes() {
       headline: "别急着划走",
       detail: "一句话钩住，5 秒内留住人",
       voiceover: `先别划走——${product}到底值不值得买，看完这条不踩坑。`,
+      videoPrompt: defaultVideoPromptForScene("前5秒·钩子", product),
       source: "钩子·留人"
     },
     {
@@ -220,6 +238,7 @@ function buildScenes() {
       headline: "这说的就是你",
       detail: insights.weakness || "参数好看，到手才发现不好用",
       voiceover: `买${category}最怕什么？参数吹上天，到手才发现日常根本不顺手。${product}是不是也这样，我替你扒清楚了。`,
+      videoPrompt: defaultVideoPromptForScene("痛点共鸣", product),
       source: "情绪曲线·共鸣"
     },
     {
@@ -228,6 +247,7 @@ function buildScenes() {
       headline: "关键不在宣传页",
       detail: insights.comfort || "真正决定体验的是日常细节",
       voiceover: `先抛个问题：${product}最该看的，不是写在宣传页上的卖点，而是${insights.comfort || "长期用下来的真实体验"}。往下看你就懂了。`,
+      videoPrompt: defaultVideoPromptForScene("悬念展开", product),
       source: "情绪曲线·悬念"
     },
     {
@@ -236,6 +256,7 @@ function buildScenes() {
       headline: "最大价值在这",
       detail: insights.comfort || "真实好评最集中的点",
       voiceover: `真正打动人的，是${insights.comfort || "它在日常场景里的省心"}。从真实评测看，用户夸得最多的就是这一点——这才是它的最大价值。但先别急着下单。`,
+      videoPrompt: defaultVideoPromptForScene("高潮·揭晓", product),
       source: "情绪曲线·高潮"
     },
     {
@@ -243,7 +264,8 @@ function buildScenes() {
       visualType: "优缺点对照",
       headline: "短板提前说",
       detail: insights.weakness || "不适合追求极致的那部分人",
-      voiceover: `话说回来，它也有短板：${insights.weakness || "不适合追求极致性能或隔音的人"}。这点不提前讲清楚，买了容易后悔。`,
+      voiceover: `话说回来，它也有短板：${insights.weakness || "不适合对影像、续航或手感有极致要求的人"}。这点不提前讲清楚，买了容易后悔。`,
+      videoPrompt: defaultVideoPromptForScene("反转·短板", product),
       source: "情绪曲线·反转"
     },
     {
@@ -252,6 +274,7 @@ function buildScenes() {
       headline: "买不买看这句",
       detail: "给结论 + 引导互动",
       voiceover: `所以结论很简单：要的是${insights.audience || "日常稳定好用"}，它值得入手；另有所求就再等等。觉得有用点个关注，评论区告诉我下一个想看谁。`,
+      videoPrompt: defaultVideoPromptForScene("结尾·结论+互动", product),
       source: "情绪曲线·收尾"
     }
   ];
@@ -294,7 +317,8 @@ function buildTimeline() {
         layout: initialState.layout,
         headline: scene.headline,
         detail: scene.detail,
-        asset: initialState.assets[index % Math.max(initialState.assets.length, 1)]?.name || "uploaded_product_asset"
+        asset: initialState.assets[index % Math.max(initialState.assets.length, 1)]?.name || "uploaded_product_asset",
+        videoPrompt: scene.videoPrompt || defaultVideoPromptForScene(scene.title, els.productName.value.trim())
       },
       checks: ["事实来自输入材料", "避免长句照搬", "保留人工复核位"],
       source: scene.source
@@ -588,7 +612,12 @@ function normalizeTimelineData(data) {
         ...(scene.visual?.transition && typeof scene.visual.transition === "object" ? { transition: scene.visual.transition } : {}),
         ...(scene.visual?.radar && typeof scene.visual.radar === "object" ? { radar: scene.visual.radar } : {}),
         ...(scene.visual?.shootGuide && typeof scene.visual.shootGuide === "object" ? { shootGuide: scene.visual.shootGuide } : {}),
-        ...(scene.visual?.broll && typeof scene.visual.broll === "object" ? { broll: scene.visual.broll } : {})
+        ...(scene.visual?.broll && typeof scene.visual.broll === "object" ? { broll: scene.visual.broll } : {}),
+        ...(scene.visual?.videoPrompt
+          ? { videoPrompt: String(scene.visual.videoPrompt) }
+          : fallback.visual?.videoPrompt
+            ? { videoPrompt: fallback.visual.videoPrompt }
+            : {})
       },
       checks: Array.isArray(scene.checks) ? scene.checks : fallback.checks,
       source: scene.source || "Cloudflare LLM"
@@ -602,7 +631,10 @@ function normalizeTimelineData(data) {
       ...(data.insights || {}),
       sourceCount: data.insights?.sourceCount || local.insights.sourceCount
     },
-    timeline
+    timeline: scrubTimelineCategoryMismatch(timeline, {
+      productName: project.product,
+      category: resolveCategory(project.product, project.category, initialState.categoryTouched)
+    })
   };
 }
 
@@ -769,8 +801,13 @@ async function oneClickGenerate() {
   }
   lastGeneratedProduct = product;
 
-  // 每次生成都按产品名刷新品类（用户未手动锁定时）
-  if (!initialState.categoryTouched) {
+  // 每次生成都按产品名刷新品类；表单品类与产品名冲突时以产品名为准（如 Nova + 耳机残留）
+  const prevCategory = els.category.value;
+  const resolvedCategory = resolveCategory(product, prevCategory, initialState.categoryTouched);
+  els.category.value = resolvedCategory;
+  if (hasCategoryConflict(product, prevCategory) && resolvedCategory === inferCategory(product)) {
+    initialState.categoryTouched = false;
+  } else if (!initialState.categoryTouched) {
     const inferred = inferCategory(product);
     if (inferred) els.category.value = inferred;
   }
@@ -2688,6 +2725,16 @@ function bindEvents() {
     if (event.key === "Enter") {
       event.preventDefault();
       oneClickGenerate();
+    }
+  });
+
+  // 换产品名时提前清空旧知乎素材，避免品类残留（如手机分镜混入耳机口播）
+  els.productName.addEventListener("input", () => {
+    const product = els.productName.value.trim();
+    if (lastGeneratedProduct && product && product !== lastGeneratedProduct) {
+      els.factsInput.value = "";
+      els.reviewInput.value = "";
+      if (els.zhihuResults) els.zhihuResults.innerHTML = "";
     }
   });
 

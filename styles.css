@@ -1107,6 +1107,22 @@ textarea:focus {
   font-weight: 800;
 }
 
+.agnes-broll-badge {
+  position: absolute;
+  z-index: 6;
+  top: 52px;
+  right: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(120, 80, 255, 0.55);
+  border: 1px solid rgba(180, 150, 255, 0.45);
+  pointer-events: none;
+}
+
 .inspect-table {
   display: grid;
   gap: 8px;

@@ -6,6 +6,7 @@ import StatRingCard from "./StatRingCard.jsx";
 import ArenaPKCard from "./ArenaPKCard.jsx";
 import ShootGuideHUDCard from "./ShootGuideHUDCard.jsx";
 import RadarHUDCard from "./RadarHUDCard.jsx";
+import { shouldHidePreactGameOverlays } from "../../../shared/gamified-video-prompt.mjs";
 import { normalizeBattle } from "../../../shared/dataviz/geometry.mjs";
 import { isArenaMode, normalizeShootGuide, normalizeRadar } from "../../../video-render/remotion/src/scene-model.mjs";
 import "./transitions.css";
@@ -51,6 +52,7 @@ export default function PreviewStage() {
   const sceneLabel = scene ? `${scene.index} / ${scenes.length}` : `1 / ${Math.max(scenes.length, 1)}`;
   const sceneKey = scene?.id || String(currentScene);
   const vtKind = PREVIEW_TRANSITIONS.has(visual.transition?.in) ? visual.transition.in : null;
+  const hideGameOverlays = shouldHidePreactGameOverlays(visual);
 
   const platform = useDirectorStore((s) => s.platform);
   const formatKey = useMemo(() => {
@@ -119,22 +121,28 @@ export default function PreviewStage() {
             <div class="host-body" />
           </div>
 
-          {/* 渲染优先级与 Remotion ReviewVideo 对齐：擂台 → 拍摄引导 → StatRing → 雷达HUD → dataviz → 普通结论卡 */}
-          {battle ? (
+          {/* Agnes 空镜已 bake 游戏特效时，隐藏 Preact 叠加层避免重叠 */}
+          {!hideGameOverlays && battle ? (
             <ArenaPKCard battle={battle} sceneKey={sceneKey} durationSec={scene?.duration || 4} formatKey={formatKey} />
-          ) : shootGuide ? (
+          ) : !hideGameOverlays && shootGuide ? (
             <ShootGuideHUDCard guide={shootGuide} sceneKey={sceneKey} durationSec={scene?.duration || 4} formatKey={formatKey} />
-          ) : visual.metric ? (
+          ) : !hideGameOverlays && visual.metric ? (
             <StatRingCard metric={visual.metric} radar={visual.radar} sceneKey={sceneKey} />
-          ) : radarHud ? (
+          ) : !hideGameOverlays && radarHud ? (
             <RadarHUDCard radar={radarHud} sceneKey={sceneKey} />
-          ) : visual.dataviz ? (
+          ) : !hideGameOverlays && visual.dataviz ? (
             <DataVizCard dataviz={visual.dataviz} sceneKey={sceneKey} />
-          ) : (
+          ) : !hideGameOverlays ? (
             <div class="info-card" id="infoCard">
               <small id="visualType">{visual.type || "结论"}</small>
               <strong id="visualHeadline">{visual.headline || "先看结论"}</strong>
               <span id="visualDetail">{visual.detail || "最大优点与最大限制"}</span>
+            </div>
+          ) : null}
+
+          {!hideGameOverlays ? null : (
+            <div class="agnes-broll-badge" aria-hidden="true">
+              AI 空镜（含游戏特效）
             </div>
           )}
 
@@ -142,28 +150,32 @@ export default function PreviewStage() {
             {scene?.subtitle || ""}
           </div>
 
-          {vtKind === "speed-line" ? (
-            <div class="vt-layer vt-speed-line" key={`${sceneKey}-sl`} aria-hidden="true">
-              <i /><i /><i /><i /><i /><i />
-            </div>
-          ) : null}
-          {vtKind === "scan-wipe" ? (
-            <div class="vt-layer vt-scan-wipe" key={`${sceneKey}-sw`} aria-hidden="true" />
-          ) : null}
-          {vtKind === "glitch-cut" ? (
-            <div class="vt-layer vt-glitch-cut" key={`${sceneKey}-gc`} aria-hidden="true" />
-          ) : null}
-          {vtKind === "pixel-dissolve" ? (
-            <div class="vt-layer vt-pixel-dissolve" key={`${sceneKey}-pd`} aria-hidden="true" />
-          ) : null}
-          {vtKind === "screen-crack" ? (
-            <div class="vt-layer vt-screen-crack" key={`${sceneKey}-sc`} aria-hidden="true">
-              <i /><i /><i /><i /><i /><i /><i />
-            </div>
-          ) : null}
-          {vtKind === "iris-close" ? (
-            <div class="vt-layer vt-iris-close" key={`${sceneKey}-ic`} aria-hidden="true" />
-          ) : null}
+          {hideGameOverlays || !vtKind ? null : (
+            <>
+              {vtKind === "speed-line" ? (
+                <div class="vt-layer vt-speed-line" key={`${sceneKey}-sl`} aria-hidden="true">
+                  <i /><i /><i /><i /><i /><i />
+                </div>
+              ) : null}
+              {vtKind === "scan-wipe" ? (
+                <div class="vt-layer vt-scan-wipe" key={`${sceneKey}-sw`} aria-hidden="true" />
+              ) : null}
+              {vtKind === "glitch-cut" ? (
+                <div class="vt-layer vt-glitch-cut" key={`${sceneKey}-gc`} aria-hidden="true" />
+              ) : null}
+              {vtKind === "pixel-dissolve" ? (
+                <div class="vt-layer vt-pixel-dissolve" key={`${sceneKey}-pd`} aria-hidden="true" />
+              ) : null}
+              {vtKind === "screen-crack" ? (
+                <div class="vt-layer vt-screen-crack" key={`${sceneKey}-sc`} aria-hidden="true">
+                  <i /><i /><i /><i /><i /><i /><i />
+                </div>
+              ) : null}
+              {vtKind === "iris-close" ? (
+                <div class="vt-layer vt-iris-close" key={`${sceneKey}-ic`} aria-hidden="true" />
+              ) : null}
+            </>
+          )}
         </div>
       </div>
     </aside>

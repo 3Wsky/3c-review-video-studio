@@ -1,4 +1,5 @@
 import { buildTimeline } from "./timeline-builder.js";
+import { scrubTimelineCategoryMismatch, resolveCategory } from "../../shared/category-sanitize.mjs";
 
 /**
  * @param {Record<string, unknown>} data
@@ -67,11 +68,28 @@ export function normalizeTimelineData(data, input) {
           : {}),
         ...(scene.visual?.broll && typeof scene.visual.broll === "object"
           ? { broll: scene.visual.broll }
-          : {})
+          : {}),
+        ...(scene.visual?.videoPrompt
+          ? { videoPrompt: String(scene.visual.videoPrompt) }
+          : fallback.visual.videoPrompt
+            ? { videoPrompt: fallback.visual.videoPrompt }
+            : {})
       },
       checks: Array.isArray(scene.checks) ? scene.checks : fallback.checks,
       source: scene.source || "Cloudflare LLM"
     };
+  });
+
+  const resolvedCategory = resolveCategory(
+    project.product,
+    project.category,
+    false
+  );
+  project.category = resolvedCategory;
+
+  const scrubbed = scrubTimelineCategoryMismatch(timeline, {
+    productName: project.product,
+    category: resolvedCategory
   });
 
   return {
@@ -82,6 +100,6 @@ export function normalizeTimelineData(data, input) {
       sourceCount:
         /** @type {Record<string, unknown>} */ (data.insights)?.sourceCount || local.insights.sourceCount
     },
-    timeline
+    timeline: scrubbed
   };
 }

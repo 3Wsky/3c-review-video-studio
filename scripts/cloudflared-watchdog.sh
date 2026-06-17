@@ -5,7 +5,7 @@ set -euo pipefail
 
 CF="/usr/local/bin/cloudflared"
 TUNNEL="${1:-3c-worker}"
-PROTO="${2:-quic}"
+PROTO="${2:-http2}"
 
 echo "[watchdog] starting cloudflared tunnel=$TUNNEL protocol=$PROTO"
 while true; do

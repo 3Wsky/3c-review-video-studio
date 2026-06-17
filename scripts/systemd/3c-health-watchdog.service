@@ -1,0 +1,10 @@
+[Unit]
+Description=3C 5060 health watchdog (recover render/voice/tunnel after sleep)
+After=network-online.target 3c-render-worker.service 3c-voice-clone.service 3c-cloudflared-tunnel.service
+
+[Service]
+Type=oneshot
+User=administrator
+ExecStart=/bin/bash /mnt/f/3c-review-video-studio/scripts/5060-health-watchdog.sh --recover
+StandardOutput=journal
+StandardError=journal

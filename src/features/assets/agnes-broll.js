@@ -1,10 +1,11 @@
 import { directorApi } from "../../legacy/director.js";
 import { patchScene } from "../editor/editor-bridge.js";
 import { getApiBase } from "../../core/api-client.js";
+import { mergeVideoPromptWithEffects, describeGamifiedEffects } from "../../../shared/gamified-video-prompt.mjs";
 
 const STORAGE_KEY = "agnesBrollJobs";
-const POLL_MS = 4000;
-const MAX_WAIT_MS = 10 * 60 * 1000;
+const POLL_MS = 8000;
+const MAX_WAIT_MS = 12 * 60 * 1000;
 
 /** @typedef {{ taskId: string; sceneIndex: number; prompt: string; startedAt: number }} AgnesJob */
 
@@ -39,28 +40,45 @@ export function buildAgnesPrompt({
   voiceover,
   visualType,
   sceneTitle,
+  videoPrompt,
+  visual,
   userPrompt
 }) {
-  const sceneSummary = buildSceneSummary({ voiceover, detail, headline, sceneTitle });
-  const illustrating = sceneSummary
-    ? `b-roll illustrating: ${sceneSummary}`
-    : "cinematic product showcase";
-  const peopleClause =
-    visualType && /拍摄|真人|口播|shootGuide/i.test(String(visualType))
-      ? ""
-      : ", no people unless shootGuide";
+  const dedicated = String(videoPrompt || userPrompt || "").trim();
+  const visualObj = visual && typeof visual === "object" ? visual : {};
+  const withFx = mergeVideoPromptWithEffects(dedicated, visualObj);
 
-  const bits = [
-    product || "3C product",
-    category || "",
-    illustrating,
-    headline ? String(headline).trim() : "",
-    "cinematic 9:16 vertical",
-    "no text" + peopleClause,
-    userPrompt ? String(userPrompt).trim() : ""
+  if (withFx.length >= 8) {
+    const lines = [
+      `产品：${product || "3C数码产品"}`,
+      category ? `品类：${category}` : "",
+      `画面意图：${withFx}`,
+      `画幅：9:16竖屏 B-roll，5秒`,
+      "无字幕无水印"
+    ].filter(Boolean);
+    return lines.join("\n");
+  }
+
+  const sceneSummary = buildSceneSummary({ voiceover, detail, headline, sceneTitle });
+  const peopleNote =
+    visualType && /拍摄|真人|口播|shootGuide/i.test(String(visualType))
+      ? "可含手部特写"
+      : "不要人物出镜";
+
+  const lines = [
+    `产品：${product || "3C数码产品"}`,
+    category ? `品类：${category}` : "",
+    sceneSummary ? `本镜画面意图：${sceneSummary}` : "",
+    headline ? `标题：${String(headline).trim()}` : "",
+    describeGamifiedEffects(visualObj)
+      ? `游戏特效：${describeGamifiedEffects(visualObj)}`
+      : "",
+    `画幅：9:16竖屏 B-roll，5秒`,
+    peopleNote,
+    "无字幕无水印"
   ].filter(Boolean);
 
-  return bits.join(", ");
+  return mergeVideoPromptWithEffects(lines.join("\n"), visualObj);
 }
 
 /** 口播/详情优先，供 Agnes 生成与当前镜语义一致的空镜 */
@@ -79,11 +97,27 @@ export function previewAgnesPrompt(input) {
   return buildAgnesPrompt(input);
 }
 
-export async function createAgnesTask({ prompt, imageUrl, durationSec = 5, format = "9:16" }) {
+export async function createAgnesTask({
+  prompt,
+  imageUrl,
+  imageDataUrl,
+  durationSec = 5,
+  format = "9:16",
+  expandPrompt = true
+}) {
   const res = await fetch(apiUrl("/api/agnes-video"), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt, imageUrl, durationSec, format, poll: false })
+    body: JSON.stringify({
+      prompt,
+      imageUrl,
+      imageDataUrl,
+      durationSec,
+      format,
+      expandPrompt,
+      poll: false,
+      mode: imageUrl || imageDataUrl ? "ti2vid" : undefined
+    })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `创建任务失败 (${res.status})`);
@@ -174,7 +208,11 @@ export function startJobPolling(job, hooks = {}) {
     try {
       const data = await pollAgnesTask(job.taskId);
       const status = data.status || "queued";
-      hooks.onProgress?.(`Agnes 空镜生成中… (${status})`);
+      hooks.onProgress?.(`Agnes V2.0 生成中… (${status})`);
+
+      if (data.promptUsed && status === "queued") {
+        hooks.onProgress?.(`已扩写英文 prompt，排队中…`);
+      }
 
       patchScene(job.sceneIndex, {
         visual: {
@@ -229,15 +267,38 @@ export function resumeAgnesJobs(hooks = {}) {
 }
 
 /**
+ * 将本地上传素材转为 data URL，供服务端托管到 Agnes（图生视频）
+ * @param {{ url?: string, type?: string } | null | undefined} asset
+ */
+export async function assetToImageDataUrl(asset) {
+  if (!asset?.url || !asset.type?.startsWith("image/")) return undefined;
+  if (/^https?:\/\//i.test(asset.url)) return undefined;
+  try {
+    const res = await fetch(asset.url);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : undefined);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 创建任务并持久化 job
- * @param {{ sceneIndex: number; prompt: string; imageUrl?: string }} input
+ * @param {{ sceneIndex: number; prompt: string; imageUrl?: string; imageDataUrl?: string }} input
  */
 export async function enqueueAgnesBroll(input, hooks = {}) {
   const created = await createAgnesTask({
     prompt: input.prompt,
     imageUrl: input.imageUrl,
+    imageDataUrl: input.imageDataUrl,
     durationSec: 5,
-    format: "9:16"
+    format: "9:16",
+    expandPrompt: true
   });
 
   /** @type {AgnesJob} */

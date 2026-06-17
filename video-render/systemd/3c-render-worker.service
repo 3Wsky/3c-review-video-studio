@@ -10,8 +10,9 @@ WorkingDirectory=/mnt/f/3c-review-video-studio/video-render
 EnvironmentFile=-/mnt/f/3c-review-video-studio/video-render/worker.env
 Environment=PORT=9234
 ExecStart=/usr/bin/node worker.mjs
-Restart=on-failure
-RestartSec=10
+# 休眠/网络抖动后进程可能正常退出，需 always 才能自拉起
+Restart=always
+RestartSec=5
 StandardOutput=journal
 StandardError=journal
 

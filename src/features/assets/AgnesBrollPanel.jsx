@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { Button, Toast } from "../../components/ui/index.js";
+import { Button, Field, Textarea, Toast } from "../../components/ui/index.js";
 import { useDirectorStore } from "../../store/useDirectorStore.js";
 import { patchScene } from "../editor/editor-bridge.js";
 import {
+  assetToImageDataUrl,
   buildAgnesPrompt,
   cancelAgnesJob,
   enqueueAgnesBroll,
@@ -51,8 +52,16 @@ export default function AgnesBrollPanel() {
 
   const imageUrl = useMemo(() => {
     const img = assets.find((a) => a.type?.startsWith("image/") && a.url);
-    return img?.url?.startsWith("http") ? img.url : undefined;
+    return img?.url && /^https?:\/\//i.test(img.url) ? img.url : undefined;
   }, [assets]);
+
+  const localImageAsset = useMemo(() => {
+    const img = assets.find((a) => a.type?.startsWith("image/") && a.url);
+    if (!img?.url || /^https?:\/\//i.test(img.url)) return null;
+    return img;
+  }, [assets]);
+
+  const videoPrompt = scene?.visual?.videoPrompt || "";
 
   const promptPreview = useMemo(
     () =>
@@ -65,10 +74,11 @@ export default function AgnesBrollPanel() {
             voiceover: scene.voiceover || scene.subtitle,
             visualType: scene.visual?.type,
             sceneTitle: scene.title,
-            userPrompt: scene.visual?.broll?.query
+            videoPrompt: scene.visual?.videoPrompt,
+            visual: scene.visual
           })
         : "",
-    [scene, product, category]
+    [scene, product, category, videoPrompt]
   );
 
   const handleGenerate = async () => {
@@ -83,13 +93,16 @@ export default function AgnesBrollPanel() {
         voiceover: scene.voiceover || scene.subtitle,
         visualType: scene.visual?.type,
         sceneTitle: scene.title,
-        userPrompt: scene.visual?.broll?.query
+        videoPrompt: scene.visual?.videoPrompt,
+        visual: scene.visual
       });
 
-      showToast("已提交 AI 空镜任务，约 3–5 分钟…可继续编辑其他镜", "default");
+      showToast("已提交 Agnes V2.0 任务（Flash 扩写 + 图生视频），约 3–6 分钟…", "default");
+
+      const imageDataUrl = localImageAsset ? await assetToImageDataUrl(localImageAsset) : undefined;
 
       await enqueueAgnesBroll(
-        { sceneIndex: currentScene, prompt, imageUrl },
+        { sceneIndex: currentScene, prompt, imageUrl, imageDataUrl },
         hooks
       );
 
@@ -131,15 +144,28 @@ export default function AgnesBrollPanel() {
   return (
     <div class="agnes-broll-panel">
       <div class="agnes-broll-panel__head">
-        <span class="agnes-broll-panel__title">AI 生成空镜（Agnes）</span>
+        <span class="agnes-broll-panel__title">AI 空镜（Agnes Video V2.0）</span>
         {statusLabel ? <span class="agnes-broll-panel__status">{statusLabel}</span> : null}
       </div>
       <p class="ce-metric-hint">
-        将基于<strong>当前镜口播</strong>生成 5s 竖屏 B-roll，完成后自动填入画面素材。免费期可能排队较久，可刷新页面后续轮询。
+        <strong>口播</strong>由 AI 一键生成；<strong>视频提示词</strong>由 AI 按镜单独撰写（与口播分离），你可下方修改后再生成空镜。
+        {localImageAsset || imageUrl ? " 已检测到产品图，将走图生视频。" : " 建议上传产品图效果更好。"}
       </p>
+      <Field label="本镜视频提示词（画面专用，非口播）">
+        <Textarea
+          rows={3}
+          placeholder="一键生成后自动填入；描述镜头画面、运镜与氛围…"
+          value={videoPrompt}
+          onInput={(e) =>
+            patchScene(currentScene, {
+              visual: { videoPrompt: e.currentTarget.value }
+            })
+          }
+        />
+      </Field>
       {promptPreview ? (
         <p class="agnes-broll-panel__prompt-preview" title={promptPreview}>
-          Prompt 预览：{promptPreview.length > 96 ? `${promptPreview.slice(0, 96)}…` : promptPreview}
+          提交 brief（Flash 扩写前）：{promptPreview.length > 96 ? `${promptPreview.slice(0, 96)}…` : promptPreview}
         </p>
       ) : null}
       <div class="agnes-broll-panel__actions">

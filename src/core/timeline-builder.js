@@ -82,7 +82,7 @@ export function buildScenes(input) {
       visualType: "优缺点对照",
       headline: "短板提前说",
       detail: insights.weakness || "不适合追求极致的那部分人",
-      voiceover: `话说回来，它也有短板：${insights.weakness || "不适合追求极致性能或隔音的人"}。这点不提前讲清楚，买了容易后悔。`,
+      voiceover: `话说回来，它也有短板：${insights.weakness || "不适合对影像、续航或手感有极致要求的人"}。这点不提前讲清楚，买了容易后悔。`,
       source: "情绪曲线·反转"
     },
     {

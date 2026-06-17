@@ -63,7 +63,12 @@
               "dataviz": { "$ref": "#/$defs/dataviz" },
               "shootGuide": { "$ref": "#/$defs/shootGuide" },
               "transition": { "$ref": "#/$defs/transition" },
-              "broll": { "$ref": "#/$defs/broll" }
+              "broll": { "$ref": "#/$defs/broll" },
+              "videoPrompt": {
+                "type": "string",
+                "maxLength": 500,
+                "description": "本镜画面/空镜 AI 生成专用提示词（与口播 voiceover 分离，一键生成时由 LLM 撰写）"
+              }
             }
           },
           "checks": { "type": "array", "items": { "type": "string" } },

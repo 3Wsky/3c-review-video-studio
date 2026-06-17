@@ -6,6 +6,8 @@ import {
   sanitizeShootGuide,
   sanitizeTransition
 } from "../dataviz/geometry.mjs";
+import { scrubTimelineCategoryMismatch, resolveCategory } from "../category-sanitize.mjs";
+import { mergeVideoPromptWithEffects, describeGamifiedEffects } from "../gamified-video-prompt.mjs";
 
 /** @param {string} value @param {number} maxLength */
 export function clampText(value, maxLength) {
@@ -53,6 +55,11 @@ export function buildGenerateTimelinePrompt(input) {
     "shootGuide": {"variant":"product_macro","title":"拍一张痛点特写","steps":["对准问题部位","稳住2秒","自然光更佳"],"angle":"45°俯拍"}
 13. 口播与画面 headline 必须围绕「${input.productName || "本产品"}」这一款产品；每个分镜的 voiceover 或 visual.headline 中至少一处出现产品名或可识别的简称（如「这部 Mate」须指代明确）。
 14. 若「真实评测素材」的品类/主体与「${input.productName || "本产品"}」/「${input.category || "未提供"}」明显不符（例如素材讲耳机但产品是手机），必须**完全忽略**该素材，不得引用其痛点、场景、参数；仅依据产品名、品类常识与「产品事实」生成。
+15. 视频画面提示词（必须 · 每镜独立）：每个分镜的 visual 必须包含 "videoPrompt" 字段——**专门描述镜头画面**（拍什么、怎么运镜、什么氛围），与 voiceover 口播**完全分离**。50-120 字中文。
+    - 若本镜含游戏化组件（擂台 compare / 雷达 radar / 属性环 metric / 拍摄引导 shootGuide / 数据图表 dataviz / 转场 transition），**必须在 videoPrompt 末尾写明这些游戏特效的视觉呈现**（如「双侧血条PK HUD」「雷达扫描线」「速度线转场」），以便 AI 空镜生成时把特效 bake 进画面，避免后期图层重叠。
+    - 禁止把口播原句抄进 videoPrompt；禁止写字幕/配音内容。
+    示例（高潮镜+擂台）：
+    "videoPrompt": "产品特写缓慢环绕，暖色轮廓光；画面叠加游戏风擂台PK HUD：双侧血条对撞、中央VS脉冲、优势数字弹出"
 
 输出结构：
 {
@@ -86,7 +93,8 @@ export function buildGenerateTimelinePrompt(input) {
         "layout": "center",
         "headline": "...",
         "detail": "...",
-        "asset": "uploaded_product_asset"
+        "asset": "uploaded_product_asset",
+        "videoPrompt": "本镜画面描述：镜头运动+主体+氛围，与口播分离"
       },
       "checks": ["事实来自输入材料", "避免长句照搬", "保留人工复核位"],
       "source": "LLM 原创结构"
@@ -108,6 +116,34 @@ ${clampText(input.facts, 2500)}
 
 真实评测素材（可能混有多款不同产品，仅供了解品类共性，不要照搬其中的具体型号/品牌/参数）：
 ${clampText(input.reviews, 4500)}`;
+}
+
+/** @param {string} title @param {string} productName */
+function fallbackVideoPrompt(title, productName) {
+  const product = productName || "产品";
+  const role = roleFromTitle(title);
+  const map = {
+    hook: `${product}正面特写从暗处推入，科技轮廓光，竖屏快切留悬念`,
+    pain: `用户操作${product}时皱眉的侧面剪影，冷色环境光，镜头轻微晃动`,
+    suspense: `${product}关键部位悬念微距，缓慢推近，暗背景一束顶光`,
+    climax: `${product}核心卖点部位环绕特写，暖色高光扫过边框，背景虚化`,
+    twist: `${product}短板部位诚实微距展示，中性光线，无美化`,
+    ending: `${product}英雄构图定格，干净暗背景，光圈收束感`,
+    middle: `${product}日常使用场景空镜，自然光，电影感竖屏`
+  };
+  return map[role] || map.middle;
+}
+
+/** @param {Record<string, unknown>} scene @param {{ productName?: string }} ctx */
+function ensureVideoPrompt(scene, ctx) {
+  const visual = { ...(/** @type {Record<string, unknown>} */ (scene.visual) || {}) };
+  const existing = String(visual.videoPrompt || "").trim();
+  let base =
+    existing.length >= 12
+      ? existing
+      : fallbackVideoPrompt(String(scene.title || ""), ctx.productName || "");
+  visual.videoPrompt = mergeVideoPromptWithEffects(base, visual);
+  return { ...scene, visual };
 }
 
 /** @param {string} title */
@@ -259,10 +295,15 @@ export function normalizeTimelineResponse(data, input) {
   const sceneDuration = targetDuration / timeline.length;
   let cursor = 0;
   const enriched = timeline.map((scene) =>
-    ensureGamifiedVisual(scene, {
-      productName: data.project?.product || input.productName || "",
-      insights: data.insights || {}
-    })
+    ensureGamifiedVisual(
+      ensureVideoPrompt(scene, {
+        productName: data.project?.product || input.productName || ""
+      }),
+      {
+        productName: data.project?.product || input.productName || "",
+        insights: data.insights || {}
+      }
+    )
   );
   const normalized = enriched.map((scene, index) => {
     const isLast = index === timeline.length - 1;
@@ -281,6 +322,7 @@ export function normalizeTimelineResponse(data, input) {
     const metric = sanitizeMetric(scene.visual?.metric);
     const compare = sanitizeCompare(scene.visual?.compare);
     const shootGuide = sanitizeShootGuide(scene.visual?.shootGuide);
+    const videoPrompt = clampText(scene.visual?.videoPrompt, 500);
     return {
       id: scene.id || `scene_${String(index + 1).padStart(2, "0")}`,
       index: index + 1,
@@ -301,7 +343,8 @@ export function normalizeTimelineResponse(data, input) {
         ...(shootGuide ? { shootGuide } : {}),
         ...(dataviz ? { dataviz } : {}),
         ...(transition ? { transition } : {}),
-        ...(radar ? { radar } : {})
+        ...(radar ? { radar } : {}),
+        ...(videoPrompt ? { videoPrompt } : {})
       },
       checks: Array.isArray(scene.checks)
         ? scene.checks
@@ -331,5 +374,15 @@ export function normalizeTimelineResponse(data, input) {
   };
 
   warnCategoryMismatch(normalized, input);
+  const resolvedCategory = resolveCategory(
+    result.project.product,
+    result.project.category,
+    false
+  );
+  result.project.category = resolvedCategory;
+  result.timeline = scrubTimelineCategoryMismatch(result.timeline, {
+    productName: result.project.product,
+    category: resolvedCategory
+  });
   return result;
 }

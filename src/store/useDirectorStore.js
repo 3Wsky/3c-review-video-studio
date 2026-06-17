@@ -23,7 +23,7 @@ function formFromState(state) {
 export const useDirectorStore = create((set, get) => ({
   phase: "generate",
   productName: "",
-  category: DEFAULT_CATEGORIES[0],
+  category: "手机",
   targetDuration: 90,
   platform: "抖音 / 快手 9:16",
   layout: "center",
@@ -115,7 +115,7 @@ export const useDirectorStore = create((set, get) => ({
     }
     set({
       productName: "",
-      category: DEFAULT_CATEGORIES[0],
+      category: "手机",
       factsText: "",
       reviewText: "",
       zhihuQuery: "",
