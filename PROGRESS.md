@@ -2,7 +2,7 @@
 
 > 这份文档记录项目的开发进度（已完成 / 进行中 / 待办）、架构、密钥位置和"换电脑如何续上"。
 > **每次有进展都要更新这份文件并提交，** 这样换设备 `git clone` 后就能接着开发。
-> 最近更新：2026-06（B/C/D/E/F 已全部合并进 main；5060 部署：worker+命名隧道已通、`RENDER_URL` 已配通并验证转发；待办=把服务做成常驻 + 端到端出片 + 装克隆音色。详见第 9 节）
+> 最近更新：**2026-06-20**（Vite+Preact 重构 + 游戏化 P0–P2 + Agnes V2.0 空镜 + 5060 看门狗已上线；最新 commit `dc23b7d`。完整交接见 **第 11 节**）
 
 ---
 
@@ -19,7 +19,7 @@
 
 | 层 | 用什么 | 说明 |
 |---|---|---|
-| 前端 | 纯静态 `index.html` + `app.js` + `styles.css` | 部署在 Cloudflare Pages，推送到 `main` 自动部署 |
+| 前端 | **Vite + Preact**（`src/` → `npm run build` → `dist/`）| Cloudflare Pages 构建命令 `npm run build`，输出目录 `dist`；legacy `director.js` 经 bridge 共存 |
 | 生成后端（主用） | Cloudflare Pages Functions | `functions/api/generate-timeline.js`（调 MiMo 生成分镜）、`functions/api/zhihu-search.js`（知乎搜索）。同源、免跨域、不睡眠 |
 | 生成后端（备用/重活） | FastAPI `backend/main.py` | 逻辑与 Functions 一致，留给 Codespaces 跑渲染/TTS 等重任务 |
 | 大模型 | 小米 MiMo（OpenAI 兼容） | Token Plan 套餐，`chat/completions` 接口 |
@@ -40,7 +40,8 @@
 | `OPENAI_MODEL` | `MiMo-V2.5` | 文本生成模型 |
 | `ZHIHU_ACCESS_SECRET` | 知乎 Access Secret（Secret） | 知乎搜索鉴权 |
 | `VOICE_CLONE_URL` | 自部署 CosyVoice 服务的公网地址（可选） | 配置后「我的克隆音色」可用，见 `voice-clone/README.md` |
-| `RENDER_URL` | **已配** = `https://render.1go.im`（命名隧道固定地址）| 「渲染视频/图文封面」按钮要用；未配返 501。已在 Production 配好并重部署，`/api/render` 验证转发成功。见 `video-render/README.md` |
+| `RENDER_URL` | **已配** = `https://render.1go.im` | 渲染/封面；5060 休眠时可能 502/530，看门狗可恢复。见 `video-render/README.md` |
+| `AGNES_API_KEY` | Agnes Video V2.0 API Key（Secret） | 编导区「AI 空镜」；`/api/agnes-video` 代理；免费期排队约 3–6 分钟 |
 
 > 本地跑 FastAPI 时同名变量放 `backend/.env`（参考 `backend/.env.example`），不要提交真实密钥。
 
@@ -194,7 +195,91 @@ curl http://localhost:9233/health   # modelLoaded:true, cuda:true
 
 ## 10. 提交规范小抄
 
-- 改前端：`index.html` / `app.js` / `styles.css`。
-- 改生成逻辑：**Cloudflare Function 和 FastAPI 两处要同步改**（`functions/api/*.js` 与 `backend/main.py` 的 prompt 保持一致）。
+- 改前端：`src/`（Preact 组件 + `src/legacy/director.js` bridge）；`npm run build` 验证后 push。
+- 改生成逻辑：**Cloudflare Function 和 FastAPI 两处要同步改**；prompt 优先改 `shared/prompts/` 再引用。
 - 每个改动开新分支 → PR → CI（Cloudflare Pages）通过 → 合并 `main` 自动部署。
 - **每次完成一块，更新本文件的「已完成/进行中/待办」再提交。**
+- **git push 代理**：本机 Clash 监听 **7890**（全局 git 代理若写 7897 会超时）。
+
+---
+
+## 11. 2026-06-20 进度快照（换项目 / 下次接续用）
+
+> 共享记忆 key：`project-handoff-2026-06-20`（KC MCP 全局 scope，agent 可读）
+
+### 11.1 当前版本
+
+| 项 | 值 |
+|---|---|
+| 最新 commit | `dc23b7d` — AI 空镜点击无反应修复（全局 Toast、卡住任务清除、busy 锁） |
+| 上一大版 | `0545540` — Agnes Video V2.0 + 每镜 `videoPrompt` + 游戏特效写入 prompt |
+| 生产站 | https://3c-review-video-studio.pages.dev |
+| 构建产物 | `dist/assets/index-B84R8uB7.js`（2026-06-20 已部署） |
+| `/api/health` | llm / 知乎 / render / voiceClone / **agnes** 全 `configured` ✅ |
+
+### 11.2 已完成（不必重做）
+
+- [x] **Vite+Preact 模块化** Phase A/B/C：`src/core` · `src/features/*` · Design System v2 · Strangler 模式（Preact UI + legacy director bridge）
+- [x] **Cloudflare Pages 构建**：Dashboard Build command = `npm run build`，output = `dist`
+- [x] **游戏化 P0–P2**：转场(speed-line/scan-wipe 等 6 种) · Stat Ring · 擂台 PK · 拍摄引导 HUD · 雷达 HUD · Kenney CC0 素材
+- [x] **游戏化 prompt 兜底**：LLM 漏标时 `ensureGamifiedVisual()` 按节奏标签自动注入镜型
+- [x] **道法起片渐进动画**（道生一→三生万物，含 reduced-motion 降级）
+- [x] **品类净化**：默认品类改「手机」；跨品类耳机文案自动 scrub（`shared/category-sanitize.mjs`）
+- [x] **每镜 videoPrompt**：口播与画面分离；Agnes 空镜优先用专用提示词 + 游戏特效 bake 进 brief
+- [x] **Agnes Phase 2+2b**：异步 B-roll（4s 轮询、localStorage 续任务）· V2.0 Flash 扩写 · ti2vid 图生视频
+- [x] **5060 部署**：CosyVoice2-0.5B `:9233`（F 盘）· render worker `:9234` · 命名隧道 render/voice.1go.im
+- [x] **5060 常驻/恢复**：systemd 三服务 + `scripts/5060-health-watchdog.sh` + Windows 计划任务 `3C-5060-*`
+- [x] **T19 CosyVoice 修复**：torch/torchaudio ABI + 卸载 deepspeed（推理不需要）
+
+### 11.3 5060 服务速查
+
+| 服务 | 本地 | 外网 | 说明 |
+|---|---|---|---|
+| 渲染 worker | `:9234` | https://render.1go.im | HyperFrames + ffmpeg |
+| 克隆音色 | `:9233` | https://voice.1go.im | CosyVoice2-0.5B，modelLoaded 约 1min |
+| 隧道 | cloudflared `3c-worker` | — | `Restart=always`，协议 http2 |
+
+**文件全在 F 盘**：`F:\3c-review-video-studio`（WSL 映射 `/mnt/f/3c-review-video-studio`）
+
+**一键恢复**（5060 唤醒后）：
+```bash
+wsl bash /mnt/f/3c-review-video-studio/scripts/5060-health-watchdog.sh --recover
+```
+或 Windows 计划任务 `3C-5060-WakeRecover`（登录触发）/ `3C-5060-HealthWatchdog`（每 5 分钟）。
+
+> **注意**：5060 合盖/关机后外网会 502/530；前端编辑、一键生成、Agnes 空镜仍可用（走 Cloudflare）；**渲染 MP4 / 克隆音色** 需 5060 在线。
+
+### 11.4 本地开发
+
+```bash
+cd F:\3c-review-video-studio   # 或 clone 后 cd
+npm install
+npm run dev                    # http://localhost:5173，/api 代理到 8788
+npm run build                  # 产出 dist/
+node --test remotion/tests/*.test.mjs   # Remotion 单测（24 条）
+```
+
+### 11.5 用户验收清单（回归用）
+
+1. **一键生成** → 道法动画 → 分镜生成
+2. **编导** ◀▶ 切换分镜 → 预览游戏化（擂台/雷达/HUD/转场/属性环）
+3. **AI 空镜** → 选中分镜 → 面板点「AI 生成空镜」→ 右下角 Toast → 3–6 分钟 MP4 填入
+4. **渲染 MP4**（需 5060 在线）
+5. **克隆音色**（需 voice 模型加载完）
+
+### 11.6 待办 / 下次优先
+
+| 优先级 | 项 | 说明 |
+|---|---|---|
+| P0 | 验证 `dc23b7d` AI 空镜修复 | 用户反馈「点击没反应」已修；需 Ctrl+F5 硬刷新后复验 |
+| P0 | 5060 唤醒 + 全链路出片 | render/voice 530 时先跑看门狗 |
+| P1 | MuseTalk 数字人 MVP | 用户确认方向 A（照片+克隆音→对口型）；端口 `:9235` presenter.1go.im |
+| P2 | 太极起片 redesign | 等设计师 `docs/tao-taichi-redesign.md` |
+| P2 | 仓库根旧 `app.js/index.html/styles.css` 清理 | 冗余，不影响运行 |
+
+### 11.7 已知限制
+
+- Agnes 免费期排队 **3–6 分钟**，定位为**离线预生成 B-roll**，不适合同步等出片
+- 配音缺 `OPENAI_API_KEY` 时 worker 静音兜底
+- 超大产品图 (>2.5MB) Agnes 自动改文生视频
+- git 全局代理端口 7897 失效，push 用 `-c http.proxy=http://127.0.0.1:7890`
