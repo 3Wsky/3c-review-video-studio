@@ -9,6 +9,7 @@ import ConsoleSection from "./shell/ConsoleSection.jsx";
 
 import RemotionDrawer from "./shell/RemotionDrawer.jsx";
 import QualityOverlays from "./features/quality/QualityOverlays.jsx";
+import GlobalToastHost from "./components/GlobalToastHost.jsx";
 
 import { useDirectorStore } from "./store/useDirectorStore.js";
 
@@ -46,6 +47,7 @@ export default function App() {
 
       <RemotionDrawer />
       <QualityOverlays />
+      <GlobalToastHost />
       <MobileActionDock />
 
 

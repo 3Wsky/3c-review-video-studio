@@ -92,6 +92,12 @@ export function initStoreBridge() {
     useDirectorStore.getState().setField("busy", busy);
   });
   bodyObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+
+  // 刷新后若 is-generating 残留，解除 Preact 侧 busy 锁
+  if (document.body.classList.contains("is-generating")) {
+    document.body.classList.remove("is-generating");
+    useDirectorStore.getState().setField("busy", false);
+  }
 }
 
 /** 触发 legacy 完整一键生成流程（含知乎搜索 + 道法动画） */

@@ -21,7 +21,10 @@ export function loadJobs() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const data = raw ? JSON.parse(raw) : { jobs: [] };
-    return Array.isArray(data.jobs) ? data.jobs : [];
+    const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+    const fresh = jobs.filter((j) => j?.taskId && Date.now() - (j.startedAt || 0) < MAX_WAIT_MS);
+    if (fresh.length !== jobs.length) saveJobs(fresh);
+    return fresh;
   } catch {
     return [];
   }
@@ -103,11 +106,13 @@ export async function createAgnesTask({
   imageDataUrl,
   durationSec = 5,
   format = "9:16",
-  expandPrompt = true
+  expandPrompt = true,
+  signal
 }) {
   const res = await fetch(apiUrl("/api/agnes-video"), {
     method: "POST",
     headers: { "content-type": "application/json" },
+    signal,
     body: JSON.stringify({
       prompt,
       imageUrl,
@@ -292,14 +297,29 @@ export async function assetToImageDataUrl(asset) {
  * @param {{ sceneIndex: number; prompt: string; imageUrl?: string; imageDataUrl?: string }} input
  */
 export async function enqueueAgnesBroll(input, hooks = {}) {
-  const created = await createAgnesTask({
-    prompt: input.prompt,
-    imageUrl: input.imageUrl,
-    imageDataUrl: input.imageDataUrl,
-    durationSec: 5,
-    format: "9:16",
-    expandPrompt: true
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
+
+  let created;
+  try {
+    hooks.onProgress?.("正在提交 Agnes 任务（Flash 扩写 + 图生视频，约 10–30 秒）…");
+    created = await createAgnesTask({
+      prompt: input.prompt,
+      imageUrl: input.imageUrl,
+      imageDataUrl: input.imageDataUrl,
+      durationSec: 5,
+      format: "9:16",
+      expandPrompt: true,
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("提交超时（90s）。若上传了超大图片，请换小图或仅文生视频重试。");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   /** @type {AgnesJob} */
   const job = {
@@ -321,4 +341,26 @@ export function cancelAgnesJob(taskId) {
   const stop = activePollers.get(taskId);
   if (stop) stop();
   removeJob(taskId);
+}
+
+/** 清除某镜残留 job（按钮被锁死时用） */
+export function clearSceneAgnesJob(sceneIndex) {
+  const all = loadJobs();
+  for (const job of all) {
+    if (job.sceneIndex === sceneIndex) {
+      const stop = activePollers.get(job.taskId);
+      if (stop) stop();
+    }
+  }
+  saveJobs(all.filter((j) => j.sceneIndex !== sceneIndex));
+}
+
+/** @param {number} sceneIndex */
+export function getSceneAgnesJob(sceneIndex) {
+  return loadJobs().find((j) => j.sceneIndex === sceneIndex) || null;
+}
+
+/** job 在 localStorage 但轮询已死 → 视为卡住 */
+export function isJobPolling(taskId) {
+  return activePollers.has(taskId);
 }

@@ -2513,12 +2513,18 @@ body.remotion-open { padding-right: min(440px, 42vw); }
   margin-top: 10px;
 }
 
-.agnes-broll-panel .ds-toast {
-  position: fixed;
-  bottom: 88px;
-  right: 16px;
-  z-index: 1100;
-  max-width: min(360px, 92vw);
+.global-toast-host {
+  z-index: 1200;
+}
+
+.agnes-broll-panel__stuck-hint {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--amber, #ffb020);
+  background: rgba(255, 176, 32, 0.08);
+  border: 1px solid rgba(255, 176, 32, 0.25);
 }
 
 /* 响应式适配 */
